@@ -1,0 +1,33 @@
+
+#Network topology used for the NAT test
+# compute2(iperf client is run on this)--------------- VLAN------------------------compute1(DUT - Has mellanox nic)[ VM is created on this. Inside VM iperf server runs]
+
+#compute1 specific configs below
+#Requirement: Has Mellanox connectx-5 NIC since we want to test HW offload mainly 
+
+#Set the IP of your Compute1 (used for ssh)
+ovn_host_ip: 10.8.2.160
+
+#PF - Set Physical interface from which VF is going to be created
+physical_interface: enp4s0f0
+
+#Set the VF to be used [No need to change this. By default 4 VFs are created and one is used]
+vf_dev_num: 0
+
+#OVN and OVS installed path on compute1
+ovs_path: /usr/local/share/openvswitch/scripts
+ovn_path: /usr/local/share/ovn/scripts
+
+#compute2 specific confgs below.
+
+#Physical Interface to use for vlan device creation.
+remote_physical_interface: eno1
+
+#Generic Configs below
+
+#Set traffic to TCP or UDP. Default is TCP
+traffic_type: TCP
+
+#Set the VLAN ID below.
+vlan_tag: 201
+

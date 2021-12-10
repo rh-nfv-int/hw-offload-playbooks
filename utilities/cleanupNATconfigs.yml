@@ -1,0 +1,92 @@
+---
+- name: Cleanup ALL Configs
+  hosts: compute1
+  become: true
+
+  vars_files:
+  - ../ovn_ovs_vars
+
+  tasks:
+  - name: Delete logical router
+    shell: ovn-nbctl lr-del lr0
+    ignore_errors: True
+
+  - name: Delete logical switch
+    shell: ovn-nbctl ls-del sw0
+    ignore_errors: True
+
+  - name: Delete logical public switch
+    shell: ovn-nbctl ls-del public
+    ignore_errors: True
+ 
+  - name: Delete port added to br-int 
+    shell: ovs-vsctl del-port br-int {{ physical_interface }}_0
+    ignore_errors: True
+
+  - name: Delete br-int OVS bridge
+    shell: ovs-vsctl del-br br-int
+    ignore_errors: True
+
+  - name: Delete port added to br-ex OVS bridge
+    shell: ovs-vsctl del-port br-ex {{ physical_interface }}
+    ignore_errors: True
+ 
+  - name: Delete br-ex OVS bridge
+    shell: ovs-vsctl del-br br-ex
+    ignore_errors: True
+
+  - name: stop OVS
+    shell: ovs-ctl stop 
+    ignore_errors: True
+
+  - name: stop controller
+    shell: ovn-ctl stop_controller
+    ignore_errors: True
+
+  - name: stop northd
+    shell: ovn-ctl stop_northd
+    ignore_errors: True
+ 
+  - name: Undefine VM
+    shell: virsh undefine testNAT
+    ignore_errors: True
+
+  - name: Destroy VM
+    shell: virsh destroy testNAT
+    ignore_errors: True
+
+  - name: Cleaning up files (delete file)
+    ansible.builtin.file:
+      path: dev_temp.xml
+      state: absent
+
+  - name: Cleaning up files (delete file)
+    ansible.builtin.file:
+      path: testNAT.xml
+      state: absent
+
+  - name: Cleaning up files (delete file)
+    ansible.builtin.file:
+      path: iperf3.service
+      state: absent
+
+  - name: Remove the created VFs
+    shell: echo 0 > /sys/class/net/{{ physical_interface }}/device/sriov_numvfs
+    ignore_errors: True
+
+- remote_user: root
+  hosts: compute2
+  become: true
+
+  vars_files:
+  - ../ovn_ovs_vars
+
+  tasks:
+  - name: Delete VLAN interface
+    shell: ip link set {{ remote_physical_interface }}.{{ vlan_tag }} down
+    ignore_errors: True
+
+  - name: Delete VLAN interface
+    shell: ip link delete {{ remote_physical_interface }}.{{ vlan_tag }}
+    ignore_errors: True
+

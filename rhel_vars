@@ -1,0 +1,7 @@
+#VM image download path. Change path accordingly if needed ( only if the image needs to be updated/changed )
+rhel_image:  http://download.eng.brq.redhat.com/rhel-8/rel-eng/RHEL-8/latest-RHEL-8.4/compose/BaseOS/x86_64/images/rhel-guest-image-8.4-992.x86_64.qcow2
+
+#RHEL subscription 
+subs_uname:
+subs_pwd:
+

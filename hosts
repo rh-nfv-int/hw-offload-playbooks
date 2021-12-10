@@ -1,0 +1,9 @@
+
+#Edit this according to your setup. 
+#Keep the host names compute1 and compute2 as those are used in the playbooks
+
+[compute1]
+rhos-nfv-0X.lab.eng.rdu2.redhat.com ovn_iface=eno1 ansible_user=root
+
+[compute2]
+rhos-nfv-0X.lab.eng.rdu2.redhat.com ovn_iface=eno1 ansible_user=root
