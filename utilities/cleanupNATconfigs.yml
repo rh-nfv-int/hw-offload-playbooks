@@ -70,6 +70,11 @@
       path: iperf3.service
       state: absent
 
+  - name: Delete RHEL image used for VM creation
+    ansible.builtin.file:
+      path: /var/lib/libvirt/images/rhel_image.qcow2
+      state: absent
+
   - name: Cleaning up files (delete file)
     ansible.builtin.file:
       path: dumpfile

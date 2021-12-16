@@ -15,18 +15,19 @@
   - set_fact:
       host_ip: "{{ ansible_default_ipv4.address }}"
 
-  - name: Install Virtualization packages on RHEL
-    shell: |
-            yum -y install qemu-kvm qemu-img
-            yum -y install libguestfs-tools virt-manager libvirt virt-install libvirt-client libguestfs-xfs
+  - name: step1 Install Virtualization packages on RHEL
+    yum:
+        name: ['qemu-kvm', 'qemu-img', 'libguestfs-tools', 'virt-manager', 'libvirt', 'virt-install', 'libvirt-client', 'libguestfs-xfs']
+        state: latest
+        update_cache: True
 
-  - name: step1 Download RHEL image
-    shell: wget {{ rhel_image }}
+  - name: step2 Download RHEL image
+    get_url:
+      url: "{{ rhel_image }}"
+      dest: /var/lib/libvirt/images/rhel_image.qcow2
+      mode: 0640
 
-  - name: step2
-    shell: mv rhel-guest-image-8.4-992.x86_64.qcow2 /var/lib/libvirt/images/rhel_image.qcow2
-
-  - name: step3a Create iperf service file to upload
+  - name: step3 Create iperf service file to upload
     shell: |
             echo "# /etc/systemd/system/iperf3.service" >> iperf3.service
             echo "# User service: $HOME/.config/systemd/user/iperf3.service" >> iperf3.service
@@ -42,7 +43,7 @@
             echo "WantedBy=multi-user.target" >> iperf3.service
 
   - name: step4 Customize the VM
-    shell: virt-customize -a /var/lib/libvirt/images/rhel_image.qcow2 --root-password password:test --run-command 'subscription-manager register --force --username={{ subs_uname }}  --password={{ subs_pwd }}' --run-command 'subscription-manager attach --auto' --run-command 'yum -y install gcc make cmake kernel-headers gcc-c++ kernel-headers.x86_64 cmake gcc gcc-c++ glibc-devel glibc-headers kernel-devel git wget tcpdump vim cscope pciutils nfs-utils perf unzip numactl-devel xorg-x11-xauth yum-utils iperf3' --run-command 'yum -y install tuned-profiles-cpu-partitioning.noarch' --run-command 'echo isolated_cores=2-9 >> /etc/tuned/cpu-partitioning-variables.conf' --run-command 'yum -y update' --upload /root/iperf3.service:/etc/systemd/system/iperf3.service --run-command 'systemctl enable iperf3' --run-command 'systemctl start iperf3'  --selinux-relabel
+    shell: virt-customize -a /var/lib/libvirt/images/rhel_image.qcow2 --root-password password:test --run-command 'subscription-manager register --force --username={{ subs_uname }}  --password={{ subs_pwd }}' --run-command 'subscription-manager attach --auto' --run-command 'yum -y install iperf3' --run-command 'yum -y update' --upload /root/iperf3.service:/etc/systemd/system/iperf3.service --run-command 'systemctl enable iperf3' --run-command 'systemctl start iperf3' --selinux-relabel
 
   - name: step5 Cleaning up any old files
     ansible.builtin.file:
@@ -50,7 +51,7 @@
       state: absent
 
   - name: step6 Create VM xml 
-    shell: virt-install --name testNAT --disk path=/var/lib/libvirt/images/rhel_image.qcow2,device=disk,bus=virtio,format=qcow2 --vcpus 8 --ram 8192 --os-type=linux --os-variant=rhel8.4 --noautoconsole --memorybacking hugepages=yes --vnc --dry-run --print-xml --cpu host-passthrough > testNAT.xml
+    shell: virt-install --name testNAT --disk path=/var/lib/libvirt/images/rhel_image.qcow2,device=disk,bus=virtio,format=qcow2 --vcpus 4 --ram 8192 --os-type=linux --os-variant=rhel8.4 --noautoconsole --memorybacking hugepages=yes --vnc --dry-run --print-xml --cpu host-passthrough > testNAT.xml
 
   - name: step7
     shell: |
@@ -306,6 +307,11 @@
   - name: Cleaning up files (delete file)
     ansible.builtin.file:
       path: iperf3.service
+      state: absent
+
+  - name: Delete RHEL image used for VM creation
+    ansible.builtin.file:
+      path: /var/lib/libvirt/images/rhel_image.qcow2
       state: absent
 
   - name: Delete logical router
