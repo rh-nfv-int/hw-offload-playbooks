@@ -70,6 +70,16 @@
       path: iperf3.service
       state: absent
 
+  - name: Cleaning up files (delete file)
+    ansible.builtin.file:
+      path: dumpfile
+      state: absent
+
+  - name: Cleaning up files (delete file)
+    ansible.builtin.file:
+      path: /etc/profile.d/custom-path.sh
+      state: absent
+
   - name: Remove the created VFs
     shell: echo 0 > /sys/class/net/{{ physical_interface }}/device/sriov_numvfs
     ignore_errors: True

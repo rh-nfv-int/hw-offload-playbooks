@@ -5,9 +5,6 @@
 #compute1 specific configs below
 #Requirement: Has Mellanox connectx-5 NIC since we want to test HW offload mainly 
 
-#Set the IP of your Compute1 (used for ssh)
-ovn_host_ip: 10.8.2.160
-
 #PF - Set Physical interface from which VF is going to be created
 physical_interface: enp4s0f0
 

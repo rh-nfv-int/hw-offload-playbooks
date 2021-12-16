@@ -9,7 +9,7 @@ As a first step we are testing the Stateful NAT usecase (for TCP and UDP).
 
 Few steps are needed to be done as below before we can trigger the run
 
-1. Fill the inventory file. (hosts file is provided. Please edit it and same file can be passed in command line while executing the test)
+1. Fill the inventory file. (inventory file is provided. Please edit it and same file can be passed in command line while executing the test)
 
 2. Since the playbook tries to access or log in to the compute1 and compute2 which we filled in the inventory file above,
    We need to copy the ssh public keys using the commands below and login and see that it doesnt expect password to be entered each time.
@@ -26,14 +26,14 @@ Few steps are needed to be done as below before we can trigger the run
    which sets the variables to appropriate values which will be used in the test run.
 
 5. Execute the test by using the command like below
-   ansible-playbook -v -i hosts testNAToffload.yml
+   ansible-playbook -v -i inventory testNAToffload.yml
 
 6. Logs to look for. It generates 2 log files which are timestamped and it will remain on your compute1 where we have taken the dump of flows and Conn Track table.
    Files are named dump_flows_<timestamp>.txt and dump_ct_table_<timestamp>.txt
 
 7. We have taken care to see that the test cleans up all things which it created (expect the above logs). In case the test bails out inbetween and resources are not cleared out.
    Please run the cleanup script in the utilities folder.
-   ansible-playbook -v -i hosts utilities/cleanupNATconfigs.yml
+   ansible-playbook -v -i inventory utilities/cleanupNATconfigs.yml
 
 Known Issues and Workarounds:
 

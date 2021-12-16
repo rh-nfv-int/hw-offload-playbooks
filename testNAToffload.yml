@@ -8,6 +8,13 @@
   - rhel_vars
 
   tasks:
+  - name: Getting the host ip
+    setup:
+      filter: ansible_default_ipv4.address
+
+  - set_fact:
+      host_ip: "{{ ansible_default_ipv4.address }}"
+
   - name: Install Virtualization packages on RHEL
     shell: |
             yum -y install qemu-kvm qemu-img
@@ -190,7 +197,7 @@
             ovs-vsctl add-port br-ex {{ physical_interface }}
             ovs-vsctl set open . external_ids:ovn-bridge-mappings="public:br-ex"
             ovs-vsctl set open . external_ids:ovn-encap-type=geneve
-            ovs-vsctl set open . external_ids:ovn-encap-ip={{ ovn_host_ip }}
+            ovs-vsctl set open . external_ids:ovn-encap-ip={{ host_ip }}
 
 - remote_user: root
   hosts: compute2
@@ -239,9 +246,9 @@
 
   - name: Wait for few seconds and dump the flows
     pause: 
-      seconds: 10
+      seconds: 5
 
-  - name: Dump connection tracking status and see if its offloaded
+  - name: Dump connection tracking status to see if its offloaded
     shell: ovs-appctl dpctl/dump-flows -m 
     register: dump_flow_output
 
@@ -262,9 +269,24 @@
       src: dump_ct_table_{{ a_timestamp }}.txt
       remote_src: yes
 
+  - name: Dump traffic on Representator port
+    shell: |
+            tcpdump -G 5 -W 1 -i {{ physical_interface }}_0 -w dumpfile
+    register: pkts
+
+  - set_fact:
+      pkt_capture: "{{ pkts.stderr }}"
+  - set_fact:
+      init1: "{{ pkt_capture.split('\n').3 }}"
+  - set_fact:
+      pkts: "{{ init1.split(' ').0 | int }}"
+
+  - name: Write num packets to file
+    shell: echo {{ pkts }} > dumpfile
+
   - name: Wait for a while before cleaning up
     pause: 
-      seconds: 30
+      seconds: 20
 
   - name: Undefine VM and destroy it 
     shell: |
@@ -319,6 +341,11 @@
   - name: Remove created VFs
     shell: echo 0 > /sys/class/net/{{ physical_interface }}/device/sriov_numvfs
 
+  - name: Cleaning up files (delete file)
+    ansible.builtin.file:
+      path: /etc/profile.d/custom-path.sh
+      state: absent
+
 - remote_user: root
   hosts: compute2
   become: true
@@ -346,6 +373,20 @@
   - name: Cleaning up files (delete file)
     ansible.builtin.file:
       path: process_ct_temp.txt
+      state: absent
+
+  - name: Read number of pkts on Representator port
+    shell: cat dumpfile
+    register: numpkts
+
+  - name: Check packets on Representator port
+    debug:
+      var: numpkts.stdout
+    failed_when: numpkts.stdout|int > 10
+
+  - name: Cleaning up files (delete file)
+    ansible.builtin.file:
+      path: dumpfile
       state: absent
 
   - name: "Print Test Result"
