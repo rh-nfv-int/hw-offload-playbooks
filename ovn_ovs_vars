@@ -2,6 +2,9 @@
 #Network topology used for the NAT test
 # compute2(iperf client is run on this)--------------- VLAN------------------------compute1(DUT - Has mellanox nic)[ VM is created on this. Inside VM iperf server runs]
 
+#Network topology used for the Transparent VLAN
+# compute2(ping is initiated from here)--------------- VLAN------------------------compute1(DUT - Has mellanox nic)[ No VM created for this use-case. Directly testing on VFs]
+
 #compute1 specific configs below
 #Requirement: Has Mellanox connectx-5 NIC since we want to test HW offload mainly 
 
@@ -22,7 +25,7 @@ remote_physical_interface: eno1
 
 #Generic Configs below
 
-#Set traffic to TCP or UDP. Default is TCP
+#Set traffic to TCP or UDP. Default is TCP [Applicable for NAT test]
 traffic_type: TCP
 
 #Set the VLAN ID below.
