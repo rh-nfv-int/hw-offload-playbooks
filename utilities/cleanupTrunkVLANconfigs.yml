@@ -1,0 +1,93 @@
+---
+- name: Cleanup ALL Configs
+  hosts: compute1
+  become: true
+
+  vars_files:
+  - ../ovn_ovs_vars
+
+  tasks:
+  - name: Delete logical switch
+    shell: ovn-nbctl ls-del sw0
+    ignore_errors: True
+
+  - name: Delete port added to br-int 
+    shell: ovs-vsctl del-port br-int {{ physical_interface }}_0
+    ignore_errors: True
+
+  - name: Delete ports added to br-int
+    shell: ovs-vsctl del-port br-int {{ physical_interface }}_1
+    ignore_errors: True
+
+  - name: Delete br-int OVS bridge
+    shell: ovs-vsctl del-br br-int
+    ignore_errors: True
+
+  - name: Delete port added to br-ex OVS bridge
+    shell: ovs-vsctl del-port br-ex {{ physical_interface }}
+    ignore_errors: True
+ 
+  - name: Delete br-ex OVS bridge
+    shell: ovs-vsctl del-br br-ex
+    ignore_errors: True
+
+  - name: stop OVS
+    shell: ovs-ctl stop 
+    ignore_errors: True
+
+  - name: stop controller
+    shell: ovn-ctl stop_controller
+    ignore_errors: True
+
+  - name: stop northd
+    shell: ovn-ctl stop_northd
+    ignore_errors: True
+ 
+  - name: Cleaning up files (delete file)
+    ansible.builtin.file:
+      path: dumpfile0
+      state: absent
+
+  - name: Cleaning up files (delete file)
+    ansible.builtin.file:
+      path: dumpfile1
+      state: absent
+
+  - name: Cleaning up files (delete file)
+    ansible.builtin.file:
+      path: /etc/profile.d/custom-path.sh
+      state: absent
+
+  - name: Delete created VLAN interfaces
+    shell: ip link del {{ physical_interface }}v{{ vf_dev_num0 }}.100
+    ignore_errors: True
+
+  - name: Delete created VLAN interfaces
+    shell: ip link del {{ physical_interface }}v{{ vf_dev_num1 }}.300
+    ignore_errors: True
+
+  - name: Remove the created VFs
+    shell: echo 0 > /sys/class/net/{{ physical_interface }}/device/sriov_numvfs
+    ignore_errors: True
+
+- remote_user: root
+  hosts: compute2
+  become: true
+
+  vars_files:
+  - ../ovn_ovs_vars
+
+  tasks:
+  - name: Delete VLAN interface
+    shell: ip link del {{ remote_physical_interface }}.{{ vlan_tag }}.100
+    ignore_errors: True
+
+  - name: Delete VLAN interface
+    shell: ip link del {{ remote_physical_interface }}.{{ vlan_tag }}.300
+    ignore_errors: True
+
+  - name: Delete VLAN interface
+    shell: ip link del {{ remote_physical_interface }}.{{ vlan_tag }}
+    ignore_errors: True
+
+

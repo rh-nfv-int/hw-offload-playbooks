@@ -2,7 +2,7 @@
 #Network topology used for the NAT test
 # compute2(iperf client is run on this)--------------- VLAN------------------------compute1(DUT - Has mellanox nic)[ VM is created on this. Inside VM iperf server runs]
 
-#Network topology used for the Transparent VLAN
+#Network topology used for the Transparent VLAN and Trunk VLAN
 # compute2(ping is initiated from here)--------------- VLAN------------------------compute1(DUT - Has mellanox nic)[ No VM created for this use-case. Directly testing on VFs]
 
 #compute1 specific configs below
@@ -13,6 +13,11 @@ physical_interface: enp4s0f0
 
 #Set the VF to be used [No need to change this. By default 4 VFs are created and one is used]
 vf_dev_num: 0
+
+#----Applicable to TrunkVLAN test--------
+vf_dev_num0: 0
+vf_dev_num1: 1
+#----------------------------------------
 
 #OVN and OVS installed path on compute1
 ovs_path: /usr/local/share/openvswitch/scripts

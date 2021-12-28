@@ -5,6 +5,7 @@ Below are the use cases supported as of now
 
 1. Stateful NAT (for TCP and UDP).
 2. Transparent VLAN
+3. Trunk VLAN
 
 # What to do before running the tests? (Common for All tests) 
 
@@ -57,6 +58,21 @@ Few steps are needed to be done as below before we can trigger the run
 4. We have taken care to see that the test cleans up all things which it created (expect the above logs). In case the test bails out inbetween and resources are not cleared out.
    Please run the cleanup script in the utilities folder.
    ansible-playbook -v -i inventory utilities/cleanupTransparentVLANconfigs.yml
+
+# Steps to test Trunk VLAN use case
+
+1. Please configure required details in the file "ovn_ovs_vars" [ No need to fill "rhel_vars" as VM creation is not applicable here]
+   which sets the variables to appropriate values which will be used in the test run.
+
+2. Execute the test by using the command like below
+   ansible-playbook -v -i inventory testTrunkVLAN.yml
+
+3. Logs to look for. It generates 2 log files which is timestamped and it will remain on your compute1 where we have taken the dump of flows.
+   File is named dump_flows_<timestamp>.txt
+
+4. We have taken care to see that the test cleans up all things which it created (expect the above logs). In case the test bails out inbetween and resources are not cleared out.
+   Please run the cleanup script in the utilities folder.
+   ansible-playbook -v -i inventory utilities/cleanupTrunkVLANconfigs.yml
 
 Known Issues and Workarounds:
 

@@ -1,0 +1,321 @@
+---
+- remote_user: root
+  hosts: compute1
+  become: true
+
+  vars_files:
+  - ovn_ovs_vars
+  - rhel_vars
+
+  tasks:
+  - name: Install tcpdump
+    yum:
+      name: tcpdump
+      state: latest
+
+  - name: Getting the host ip
+    setup:
+      filter: ansible_default_ipv4.address
+
+  - set_fact:
+      host_ip: "{{ ansible_default_ipv4.address }}"
+
+  - name: Add another bin dir to system-wide $PATH.
+    copy:
+      dest: /etc/profile.d/custom-path.sh
+      content: 'export PATH=$PATH:{{ ovs_path }}:{{ ovn_path }}'
+
+  - name: export path
+    shell: source /etc/profile.d/custom-path.sh
+
+  - name: Parse PCI name and get address of PF
+    shell: grep PCI_SLOT_NAME /sys/class/net/{{ physical_interface }}/device/uevent
+    register: output
+  - set_fact:
+        res: "{{ output.stdout }}"
+  - set_fact:
+        ini: "{{ res.split(':') }}"
+  - set_fact:
+        pfdomain: "{{ ini.0.split('=').1 }}"
+  - set_fact:
+        pfbus: "{{ ini.1 }}"
+  - set_fact:
+        pfslot: "{{ ini.2.split('.').0 }}"
+  - set_fact:
+        pffunction: "{{ ini.2.split('.').1 }}"
+
+  - name: start OVS, Set hw-offload flags and create VFs
+    shell: | 
+          ovs-ctl start
+          ovs-vsctl set Open_vSwitch . other_config:hw-offload=true
+          ovs-vsctl set Open_vSwitch . other_config:tc-policy=none
+          devlink dev eswitch set pci/{{ pfdomain }}:{{ pfbus }}:{{ pfslot }}.{{ pffunction }} mode switchdev
+          ethtool -K {{ physical_interface }} hw-tc-offload on
+          echo 4 > /sys/class/net/{{ physical_interface }}/device/sriov_numvfs
+
+  - name: step10
+    pause:
+      seconds: 10
+
+  - name: Creatd VLAN interface and bring it up
+    shell: |
+            ip addr add 6.6.6.100/24 dev {{ physical_interface }}v{{ vf_dev_num0 }}
+            ip addr add 6.6.6.101/24 dev {{ physical_interface }}v{{ vf_dev_num1 }}
+            ip link add link {{ physical_interface }}v{{ vf_dev_num0 }} name {{ physical_interface }}v{{ vf_dev_num0 }}.100 type vlan id 100
+            ip link add link {{ physical_interface }}v{{ vf_dev_num1 }} name {{ physical_interface }}v{{ vf_dev_num1 }}.300 type vlan id 300
+            ip link set {{ physical_interface }}v{{ vf_dev_num0 }}.100 up
+            ip link set {{ physical_interface }}v{{ vf_dev_num1 }}.300 up
+            ip link set address f8:f2:1e:03:bf:f2 dev {{ physical_interface }}v{{ vf_dev_num0 }}.100
+            ip link set address aa:bb:cc:dd:ee:f2 dev {{ physical_interface }}v{{ vf_dev_num1 }}.300
+            ip addr add 5.5.5.100/24 dev {{ physical_interface }}v{{ vf_dev_num0 }}.100
+            ip addr add 7.7.7.100/24 dev {{ physical_interface }}v{{ vf_dev_num1 }}.300
+
+  - name: start OVN northd
+    shell: ovn-ctl start_northd
+
+  - name: start OVN controller
+    shell: ovn-ctl start_controller
+
+  - name: Do OVN configs for logical switch
+    shell: |
+            ovn-nbctl ls-add sw0
+            ovn-nbctl add Logical-Switch sw0 other_config vlan-passthru=true
+            ovn-nbctl lsp-add sw0 ln-public "" {{ vlan_tag }}
+            ovn-nbctl lsp-set-type ln-public localnet
+            ovn-nbctl lsp-set-addresses ln-public unknown
+            ovn-nbctl lsp-set-options ln-public network_name=public
+            ovn-nbctl lsp-add sw0 sw0-port0
+            ovn-nbctl lsp-add sw0 sw0-port1
+            ovn-nbctl lsp-set-addresses sw0-port0 "f8:f2:1e:03:bf:f2 5.5.5.100"
+            ovn-nbctl lsp-set-addresses sw0-port1 "aa:bb:cc:dd:ee:f2 7.7.7.100"
+
+  - name: Do OVS configs
+    shell: |
+            ovs-vsctl --may-exist add-br br-int
+            ovs-vsctl --may-exist add-br br-ex
+            ovs-vsctl set open . external-ids:ovn-bridge-mappings=public:br-ex
+            ovs-vsctl add-port br-ex {{ physical_interface }}
+            ovs-vsctl add-port br-int {{ physical_interface }}_0 -- set Interface {{ physical_interface }}_0 external-ids:iface-id=sw0-port0 options:tx_pcap={{ physical_interface }}_0-tx.pcap options:rxq_pcap={{ physical_interface }}_0-rx.pcap ofport-request=1
+            ovs-vsctl add-port br-int {{ physical_interface }}_1 -- set Interface {{ physical_interface }}_1 external-ids:iface-id=sw0-port1 options:tx_pcap={{ physical_interface }}_1-tx.pcap options:rxq_pcap={{ physical_interface }}_1-rx.pcap ofport-request=2
+            ovs-vsctl set open . external_ids:ovn-encap-type=geneve
+            ovs-vsctl set open . external_ids:ovn-encap-ip={{ host_ip }}
+
+- remote_user: root
+  hosts: compute2
+  become: true
+
+  vars_files:
+  - ovn_ovs_vars
+
+  tasks:
+  - name: Create VLAN interface and bring it up
+    shell: |
+            ip link add link {{ remote_physical_interface }} name {{ remote_physical_interface }}.{{ vlan_tag }} type vlan id {{ vlan_tag }}
+            ip link set {{ remote_physical_interface }}.{{ vlan_tag }} up
+            ip addr add 6.6.6.6/24 dev {{ remote_physical_interface }}.{{ vlan_tag }}
+            ip link add link {{ remote_physical_interface }}.{{ vlan_tag }} name {{ remote_physical_interface }}.{{ vlan_tag }}.100 type vlan id 100
+            ip link add link {{ remote_physical_interface }}.{{ vlan_tag }} name {{ remote_physical_interface }}.{{ vlan_tag }}.300 type vlan id 300
+            ip link set {{ remote_physical_interface }}.{{ vlan_tag }}.100 up
+            ip link set {{ remote_physical_interface }}.{{ vlan_tag }}.300 up
+            ip link set address f8:f2:1e:03:bf:f4 dev {{ remote_physical_interface }}.{{ vlan_tag }}.100
+            ip link set address aa:bb:cc:dd:ee:f4 dev {{ remote_physical_interface }}.{{ vlan_tag }}.300
+            ip addr add 5.5.5.5/24 dev {{ remote_physical_interface }}.{{ vlan_tag }}.100
+            ip addr add 7.7.7.7/24 dev {{ remote_physical_interface }}.{{ vlan_tag }}.300
+
+  - name: Wait for few seconds before pinging
+    pause:
+      seconds: 10
+
+  - name: Starting the ping from compute2 from vlan 100 and run for 100 seconds
+    shell: ping 5.5.5.100 -w100
+    async: 100
+    poll: 0
+
+
+- remote_user: root
+  hosts: compute1
+  become: true
+
+  vars_files:
+  - ovn_ovs_vars
+
+  vars: 
+  - a_timestamp: "{{ timestamp.stdout }}"
+
+  tasks:
+  - name: Get a timestamp
+    command: date +%Y%m%d%H%M%S
+    register: timestamp
+
+  - name: Dump connection tracking status to see if its offloaded
+    shell: ovs-appctl dpctl/dump-flows -m 
+    register: dump_flow_output
+
+  - name: Copy logs to file
+    shell: echo "{{ dump_flow_output.stdout }}" > dump_flows_{{ a_timestamp }}.txt
+
+  - name: Dump traffic on Representator port of vf0
+    shell: |
+            tcpdump -G 15 -W 1 -i {{ physical_interface }}_0 -w dumpfile0
+    register: pkts0
+
+
+  - set_fact:
+      pkt0_capture: "{{ pkts0.stderr }}"
+  - set_fact:
+      init0: "{{ pkt0_capture.split('\n').3 }}"
+  - set_fact:
+      pkts0: "{{ init0.split(' ').0 | int }}"
+
+
+  - name: Write num packets to file
+    shell: echo {{ pkts0 }} > dumpfile0
+
+
+- remote_user: root
+  hosts: compute2
+  become: true
+
+  vars_files:
+  - ovn_ovs_vars
+
+  tasks:
+
+  - name: Wait for few seconds before pinging
+    pause:
+      seconds: 10
+
+  - name: Starting the ping from compute2 from vlan 300 and run for 100 seconds
+    shell: ping 7.7.7.100 -w100
+    async: 100
+    poll: 0
+
+
+- remote_user: root
+  hosts: compute1
+  become: true
+
+  vars_files:
+  - ovn_ovs_vars
+
+  vars:
+  - a_timestamp: "{{ timestamp.stdout }}"
+
+  tasks:
+  - name: Get a timestamp
+    command: date +%Y%m%d%H%M%S
+    register: timestamp
+
+  - name: Dump connection tracking status to see if its offloaded
+    shell: ovs-appctl dpctl/dump-flows -m
+    register: dump_flow_output
+
+  - name: Copy logs to file
+    shell: echo "{{ dump_flow_output.stdout }}" > dump_flows_{{ a_timestamp }}.txt
+
+  - name: Dump traffic on Representator port of vf1
+    shell: |
+            tcpdump -G 15 -W 1 -i {{ physical_interface }}_1 -w dumpfile1
+    register: pkts1
+
+  - set_fact:
+      pkt1_capture: "{{ pkts1.stderr }}"
+  - set_fact:
+      init1: "{{ pkt1_capture.split('\n').3 }}"
+  - set_fact:
+      pkts1: "{{ init1.split(' ').0 | int }}"
+
+  - name: Write num packets to file
+    shell: echo {{ pkts1 }} > dumpfile1
+
+
+- remote_user: root
+  hosts: compute2
+  become: true
+
+  vars_files:
+  - ovn_ovs_vars
+
+  tasks:
+  - name: Delete created VLAN interfaces
+    shell: |
+            ip link del {{ remote_physical_interface }}.{{ vlan_tag }}.100
+            ip link del {{ remote_physical_interface }}.{{ vlan_tag }}.300
+            ip link del {{ remote_physical_interface }}.{{ vlan_tag }} 
+
+- remote_user: root
+  hosts: compute1
+  become: true
+
+  vars_files:
+  - ovn_ovs_vars
+
+  tasks:
+  - name: Delete logical switch
+    shell: ovn-nbctl ls-del sw0
+
+  - name: Delete port added to br-int
+    shell: |
+            ovs-vsctl del-port br-int {{ physical_interface }}_0
+            ovs-vsctl del-port br-int {{ physical_interface }}_1
+
+  - name: Delete br-int OVS bridge
+    shell: ovs-vsctl del-br br-int
+
+  - name: Delete port added to br-ex OVS bridge
+    shell: ovs-vsctl del-port br-ex {{ physical_interface }}
+
+  - name: Delete br-ex OVS bridge
+    shell: ovs-vsctl del-br br-ex
+
+  - name: stop OVS
+    shell: ovs-ctl stop
+
+  - name: stop OVN controller
+    shell: ovn-ctl stop_controller
+
+  - name: stop OVN northd
+    shell: ovn-ctl stop_northd
+
+  - name: Delete created VLAN interfaces
+    shell: |
+            ip link del {{ physical_interface }}v{{ vf_dev_num0 }}.100
+            ip link del {{ physical_interface }}v{{ vf_dev_num1 }}.300
+
+  - name: Remove created VFs
+    shell: echo 0 > /sys/class/net/{{ physical_interface }}/device/sriov_numvfs
+
+  - name: Cleaning up files (delete file)
+    ansible.builtin.file:
+      path: /etc/profile.d/custom-path.sh
+      state: absent
+
+  - name: Read number of pkts on Representator port of vf0
+    shell: cat dumpfile0
+    register: numpkts0
+
+  - name: Read number of pkts on Representator port of vf1
+    shell: cat dumpfile1
+    register: numpkts1
+
+  - name: Check packets on Representator port of vf0
+    debug:
+      var: numpkts0.stdout
+    failed_when: numpkts0.stdout|int > 10
+
+  - name: Check packets on Representator port of vf1
+    debug:
+      var: numpkts1.stdout
+    failed_when: numpkts1.stdout|int > 10
+
+  - name: Cleaning up files (delete file)
+    ansible.builtin.file:
+     path: "{{ item }}"
+     state: absent
+    with_items:
+     - dumpfile0
+     - dumpfile1
+
+  - name: "Print Test Result"
+    debug: msg="TRUNK VLAN TEST COMPLETED"
+
