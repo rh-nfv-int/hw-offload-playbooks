@@ -7,6 +7,7 @@ Below are the use cases supported as of now
 2. Transparent VLAN
 3. Trunk VLAN
 4. Stateful ACL
+5. QoS
 
 # What to do before running the tests? (Common for All tests) 
 
@@ -36,7 +37,9 @@ Few steps are needed to be done as below before we can trigger the run
    which sets the variables to appropriate values which will be used in the test run.
 
 2. Execute the test by using the command like below for NAT or NAT with ACLs accordingly
+
    ansible-playbook -v -i inventory testNAToffload.yml
+
    ansible-playbook -v -i inventory testNATwithACLoffload.yml
 
 3. Logs to look for. It generates 2 log files which are timestamped and it will remain on your compute1 where we have taken the dump of flows and Conn Track table.
@@ -44,7 +47,9 @@ Few steps are needed to be done as below before we can trigger the run
 
 4. We have taken care to see that the test cleans up all things which it created (expect the above logs). In case the test bails out inbetween and resources are not cleared out.
    Please run the cleanup script in the utilities folder.
+
    ansible-playbook -v -i inventory utilities/cleanupNATconfigs.yml
+
    ansible-playbook -v -i inventory utilities/cleanupNATwithACLconfigs.yml
 
 # Steps to test Transparent VLAN use case
@@ -77,6 +82,24 @@ Few steps are needed to be done as below before we can trigger the run
    Please run the cleanup script in the utilities folder.
    ansible-playbook -v -i inventory utilities/cleanupTrunkVLANconfigs.yml
 
+# Steps to test QoS use case
+
+1. Please configure required details in the file "ovn_ovs_vars" [ No need to fill "rhel_vars" as VM creation is not applicable here]
+   which sets the variables to appropriate values which will be used in the test run.
+
+2. Execute the test by using the command like below
+   ansible-playbook -v -i inventory testQos.yml
+
+3. Logs to look for. It generates 1 log file which is timestamped and it will remain on your compute1 where we have taken the dump of flows.
+   File is named dump_flows_<timestamp>.txt
+
+4. We have taken care to see that the test cleans up all things which it created (expect the above logs). In case the test bails out inbetween and resources are not cleared out.
+   Please run the cleanup script in the utilities folder.
+   ansible-playbook -v -i inventory utilities/cleanupQosconfigs.yml
+
+
 Known Issues and Workarounds:
 
 Sometimes --> "subscription-manager register --force" throws up an error and it does not create the VM itself --> Such cases just re-run the playbook and usually the next run it works all good. Investigation in progress for this . But this shouldn't be a blocker. 
+
+Stateful ACL usecase: There is a know bug regarding this. For more information see BZ 2043187
