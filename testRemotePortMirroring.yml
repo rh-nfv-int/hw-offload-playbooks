@@ -1,0 +1,491 @@
+---
+- remote_user: root
+  hosts: compute1
+  become: true
+
+  vars_files:
+  - ovn_ovs_vars
+  - rhel_vars
+
+  tasks:
+  - name: Getting the host ip
+    setup:
+      filter: ansible_default_ipv4.address
+
+  - set_fact:
+      host_ip: "{{ ansible_default_ipv4.address }}"
+
+  - name: Install Virtualization packages on RHEL
+    yum:
+        name: ['qemu-kvm', 'qemu-img', 'libguestfs-tools', 'virt-manager', 'libvirt', 'virt-install', 'libvirt-client', 'libguestfs-xfs', 'tcpdump']
+        state: latest
+        update_cache: True
+
+  - name: Download RHEL image
+    get_url:
+      url: "{{ rhel_image }}"
+      dest: /var/lib/libvirt/images/rhel_image.qcow2
+      mode: 0640
+
+  - name: Create ping service file to upload
+    shell: |
+            echo "# /etc/systemd/system/ping.service" >> ping.service
+            echo "# User service: $HOME/.config/systemd/user/ping.service" >> ping.service
+            echo "" >> ping.service
+            echo "[Unit]" >> ping.service
+            echo "Description=ping from VM1 to VM2" >> ping.service
+            echo "After=network.target" >> ping.service
+            echo "" >> ping.service
+            echo "[Service]" >> ping.service
+            echo "Type=Simple" >> ping.service
+            echo "Restart=always" >> ping.service
+            echo "RestartSec=20" >> ping.service
+            echo "ExecStart=/usr/bin/ping 5.5.5.3" >> ping.service
+            echo "" >> ping.service
+            echo "[Install]" >> ping.service
+            echo "WantedBy=multi-user.target" >> ping.service
+
+  - name: step4 Customize the VM
+    shell: virt-customize -a /var/lib/libvirt/images/rhel_image.qcow2 --root-password password:test --run-command 'subscription-manager register --force --username={{ subs_uname }}  --password={{ subs_pwd }}' --run-command 'subscription-manager attach --auto' --run-command 'yum -y update' --selinux-relabel  --upload /root/ping.service:/etc/systemd/system/ping.service --run-command 'systemctl enable ping' --run-command 'systemctl start ping'
+
+  - name: Cleaning up any old files
+    ansible.builtin.file:
+      path: testNAT.xml
+      state: absent
+
+  - name: Create VM xml 
+    shell: virt-install --name testNAT --disk path=/var/lib/libvirt/images/rhel_image.qcow2,device=disk,bus=virtio,format=qcow2 --vcpus 4 --ram 8192 --os-type=linux --os-variant=rhel8.4 --noautoconsole --memorybacking hugepages=yes --vnc --dry-run --print-xml --cpu host-passthrough > testNAT.xml
+
+  - name: Edit VM xml
+    shell: |
+            sed -ie '/<interface type="network">/d' testNAT.xml
+            sed -ie '/<source network="default"/d' testNAT.xml
+            sed -ie '/<mac address="/d' testNAT.xml
+            sed -ie '/<model type="virtio"/d' testNAT.xml
+            sed -ie '/interface>/d' testNAT.xml
+            rm -f testNAT.xmle
+
+  - name: Define VM
+    shell: virsh define testNAT.xml
+
+  - name: Starting the VM
+    shell: virsh start testNAT
+
+  - name: Add another bin dir to system-wide $PATH.
+    copy:
+      dest: /etc/profile.d/custom-path.sh
+      content: 'export PATH=$PATH:{{ ovs_path }}:{{ ovn_path }}'
+
+  - name: export path
+    shell: source /etc/profile.d/custom-path.sh
+
+  - name: Parse PCI name and get address of PF
+    shell: grep PCI_SLOT_NAME /sys/class/net/{{ physical_interface }}/device/uevent
+    register: output
+  - set_fact:
+        res: "{{ output.stdout }}"
+  - set_fact:
+        ini: "{{ res.split(':') }}"
+  - set_fact:
+        pfdomain: "{{ ini.0.split('=').1 }}"
+  - set_fact:
+        pfbus: "{{ ini.1 }}"
+  - set_fact:
+        pfslot: "{{ ini.2.split('.').0 }}"
+  - set_fact:
+        pffunction: "{{ ini.2.split('.').1 }}"
+
+  - name: start OVS, Set hw-offload flags and create VFs
+    shell: | 
+          ovs-ctl start
+          ovs-vsctl set Open_vSwitch . other_config:hw-offload=true
+          ovs-vsctl set Open_vSwitch . other_config:tc-policy=none
+          ovs-ctl stop
+          ovs-ctl start
+          devlink dev eswitch set pci/{{ pfdomain }}:{{ pfbus }}:{{ pfslot }}.{{ pffunction }} mode switchdev
+          ethtool -K {{ physical_interface }} hw-tc-offload on
+          echo 4 > /sys/class/net/{{ physical_interface }}/device/sriov_numvfs
+
+  - name: step10
+    pause:
+      seconds: 10
+
+  - name: Find device mac address of VF
+    shell: cat /sys/class/net/{{ physical_interface }}v{{ vf_dev_num0 }}/address
+    register: vf_mac_addr
+
+  - name: Parse PCI name and get address
+    shell: grep PCI_SLOT_NAME /sys/class/net/{{ physical_interface }}v{{ vf_dev_num0 }}/device/uevent
+    register: output
+  - set_fact:
+        result: "{{ output.stdout }}"
+  - set_fact:
+        initial: "{{ result.split(':') }}"
+  - set_fact:
+        domain: "{{ initial.0.split('=').1 }}"
+  - set_fact:
+        bus: "{{ initial.1 }}"
+  - set_fact:
+        slot: "{{ initial.2.split('.').0 }}"
+  - set_fact:
+        function: "{{ initial.2.split('.').1 }}"
+
+  - name: Cleaning up any old files
+    ansible.builtin.file:
+      path: dev_temp.xml
+      state: absent
+
+  - name: Create dev xml
+    shell: |
+            echo "<interface type='hostdev' managed='yes'>" >> dev_temp.xml
+            echo "<mac address='{{ vf_mac_addr.stdout }}'/>" >> dev_temp.xml
+            echo "<driver name='vfio'/>" >> dev_temp.xml
+            echo "<source>" >> dev_temp.xml
+            echo "    <address type='pci' domain='0x{{ domain }}' bus='0x{{ bus }}' slot='0x{{ slot }}' function='0x{{ function }}'/>" >> dev_temp.xml
+            echo "</source>" >> dev_temp.xml
+            echo "</interface>" >> dev_temp.xml
+
+  - name: Attach the VF to the VM
+    shell: virsh attach-device testNAT dev_temp.xml
+
+  - name: Download RHEL image
+    get_url:
+      url: "{{ rhel_image }}"
+      dest: /var/lib/libvirt/images/rhelimage.qcow2
+      mode: 0640
+
+  - name: Customize the VM
+    shell: virt-customize -a /var/lib/libvirt/images/rhelimage.qcow2 --root-password password:test --run-command 'subscription-manager register --force --username={{ subs_uname }}  --password={{ subs_pwd }}' --run-command 'subscription-manager attach --auto' --run-command 'yum -y install iperf3' --run-command 'yum -y update' --selinux-relabel
+
+  - name: Cleaning up any old files
+    ansible.builtin.file:
+      path: testNAT1.xml
+      state: absent
+
+  - name: Create VM xml 
+    shell: virt-install --name testNAT1 --disk path=/var/lib/libvirt/images/rhelimage.qcow2,device=disk,bus=virtio,format=qcow2 --vcpus 4 --ram 8192 --os-type=linux --os-variant=rhel8.4 --noautoconsole --memorybacking hugepages=yes --vnc --dry-run --print-xml --cpu host-passthrough > testNAT1.xml
+
+  - name: Edit VM xml
+    shell: |
+            sed -ie '/<interface type="network">/d' testNAT1.xml
+            sed -ie '/<source network="default"/d' testNAT1.xml
+            sed -ie '/<mac address="/d' testNAT1.xml
+            sed -ie '/<model type="virtio"/d' testNAT1.xml
+            sed -ie '/interface>/d' testNAT1.xml
+            rm -f testNAT1.xmle
+
+  - name: Define VM
+    shell: virsh define testNAT1.xml
+
+  - name: Starting the VM
+    shell: virsh start testNAT1
+
+  - name: Find device mac address of VF
+    shell: cat /sys/class/net/{{ physical_interface }}v{{ vf_dev_num1 }}/address
+    register: vf_mac_addr1
+
+  - name: Parse PCI name and get address
+    shell: grep PCI_SLOT_NAME /sys/class/net/{{ physical_interface }}v{{ vf_dev_num1 }}/device/uevent
+    register: output
+  - set_fact:
+        result: "{{ output.stdout }}"
+  - set_fact:
+        initial: "{{ result.split(':') }}"
+  - set_fact:
+        domain: "{{ initial.0.split('=').1 }}"
+  - set_fact:
+        bus: "{{ initial.1 }}"
+  - set_fact:
+        slot: "{{ initial.2.split('.').0 }}"
+  - set_fact:
+        function: "{{ initial.2.split('.').1 }}"
+
+  - name: Cleaning up any old files
+    ansible.builtin.file:
+      path: dev_temp1.xml
+      state: absent
+
+  - name: Create dev xml
+    shell: |
+            echo "<interface type='hostdev' managed='yes'>" >> dev_temp1.xml
+            echo "<mac address='{{ vf_mac_addr1.stdout }}'/>" >> dev_temp1.xml
+            echo "<driver name='vfio'/>" >> dev_temp1.xml
+            echo "<source>" >> dev_temp1.xml
+            echo "    <address type='pci' domain='0x{{ domain }}' bus='0x{{ bus }}' slot='0x{{ slot }}' function='0x{{ function }}'/>" >> dev_temp1.xml
+            echo "</source>" >> dev_temp1.xml
+            echo "</interface>" >> dev_temp1.xml
+
+  - name: Attach the VF to the VM
+    shell: virsh attach-device testNAT1 dev_temp1.xml
+
+  - name: start OVN northd
+    shell: ovn-ctl start_northd
+
+  - name: start OVN controller
+    shell: ovn-ctl start_controller
+
+  - name: Do OVN configs for logical switch
+    shell: |
+            ovn-nbctl ls-add sw0
+            ovn-nbctl lsp-add sw0 ln-public "" {{ vlan_tag }}
+            ovn-nbctl lsp-add sw0 ln-public
+            ovn-nbctl lsp-set-type ln-public localnet
+            ovn-nbctl lsp-set-addresses ln-public unknown
+            ovn-nbctl lsp-set-options ln-public network_name=public
+            ovn-nbctl set logical_switch sw0 other_config:subnet="5.5.5.0/24" other_config:exclude_ips="5.5.5.1"
+            dhcp_id=$(ovn-nbctl create dhcp_options cidr=5.5.5.0/24 options="\"server_id\"=\"5.5.5.1\" \"server_mac\"=\"00:00:00:00:ff:01\" \"lease_time\"=\"3600\" \"router\"=\"5.5.5.1\"")
+            ovn-nbctl lsp-add sw0 sw0-port1
+            ovn-nbctl lsp-add sw0 sw0-port2
+            ovn-nbctl lsp-set-dhcpv4-options sw0-port1 $dhcp_id
+            ovn-nbctl lsp-set-dhcpv4-options sw0-port2 $dhcp_id
+            ovn-nbctl lsp-set-addresses sw0-port1 "{{ vf_mac_addr.stdout }} dynamic"
+            ovn-nbctl lsp-set-addresses sw0-port2 "{{ vf_mac_addr1.stdout }} dynamic"
+
+  - name: Do OVS configs
+    shell: |
+            ovs-vsctl --may-exist add-br br-int
+            ovs-vsctl --may-exist add-br br-ex
+            ovs-vsctl set open . external-ids:ovn-bridge-mappings=public:br-ex
+            ovs-vsctl add-port br-ex {{ physical_interface }}
+            ovs-vsctl add-port br-int {{ physical_interface }}_0 -- set Interface {{ physical_interface }}_0 external-ids:iface-id=sw0-port1
+            ovs-vsctl add-port br-int {{ physical_interface }}_1 -- set Interface {{ physical_interface }}_1 external-ids:iface-id=sw0-port2
+            ovs-vsctl set open . external_ids:ovn-encap-type=geneve
+            ovs-vsctl set open . external_ids:ovn-encap-ip={{ host_ip }}
+            ovs-vsctl add-port br-int gre0 -- set Interface gre0 type=gre options:local_ip=10.10.10.1 options:remote_ip=10.10.10.2 options:key=0 -- --id=@p get port gre0 -- --id=@m create mirror name=mirror0 output-port=@p -- set bridge br-int mirrors=@m
+            ovs-vsctl -- --id=@p1 get Port {{ physical_interface }}_0 -- add Mirror mirror0 select-dst-port @p1
+            ovs-vsctl -- --id=@p1 get Port {{ physical_interface }}_0 -- add Mirror mirror0 select-src-port @p1
+
+  - name: Create VLAN interface and bring it up
+    shell: |
+            ip link add link {{ physical_interface }} name {{ physical_interface }}.{{ vlan_tag }} type vlan id {{ vlan_tag }}
+            ip link set {{ physical_interface }}.{{ vlan_tag }} up
+            ip addr add 10.10.10.1/24 dev {{ physical_interface }}.{{ vlan_tag }}
+
+- remote_user: root
+  hosts: compute2
+  become: true
+
+  vars_files:
+  - ovn_ovs_vars
+
+  tasks:
+  - name: Install latest version of tcpdump
+    yum:
+      name: tcpdump
+      state: latest
+
+  - name: Create VLAN interface and bring it up
+    shell: |
+            ip link add link {{ remote_physical_interface }} name {{ remote_physical_interface }}.{{ vlan_tag }} type vlan id {{ vlan_tag }}
+            ip link set {{ remote_physical_interface }}.{{ vlan_tag }} up
+            ip addr add 10.10.10.2/24 dev {{ remote_physical_interface }}.{{ vlan_tag }}
+
+  - name: Wait for 5 seconds
+    pause:
+      seconds: 5
+
+  - name: Dump traffic on VLAN interface
+    shell: |
+            tcpdump -G 10 -W 1 -i {{ remote_physical_interface }}.{{ vlan_tag }} -w dumpfile
+    register: pkts
+
+  - set_fact:
+      pkt_capture: "{{ pkts.stderr }}"
+  - set_fact:
+      init1: "{{ pkt_capture.split('\n').3 }}"
+  - set_fact:
+      pkts: "{{ init1.split(' ').0 | int }}"
+
+  - name: Write num packets to file
+    shell: echo {{ pkts }} > dumpfile
+
+- remote_user: root
+  hosts: compute1
+  become: true
+
+  vars_files:
+  - ovn_ovs_vars
+
+  vars: 
+  - a_timestamp: "{{ timestamp.stdout }}"
+
+  tasks:
+  - name: Get a timestamp
+    command: date +%Y%m%d%H%M%S
+    register: timestamp
+
+  - name: Dump connection tracking status to see if its offloaded
+    shell: ovs-appctl dpctl/dump-flows -m 
+    register: dump_flow_output
+
+  - name: Copy logs to file
+    shell: echo "{{ dump_flow_output.stdout }}" > dump_flows_{{ a_timestamp }}.txt
+
+  - name: Dump traffic on Representator port
+    shell: |
+            tcpdump -G 10 -W 1 -i {{ physical_interface }}_0 -w dumpfile
+    register: pkts
+
+  - set_fact:
+      pkt_capture: "{{ pkts.stderr }}"
+  - set_fact:
+      init1: "{{ pkt_capture.split('\n').3 }}"
+  - set_fact:
+      pkts: "{{ init1.split(' ').0 | int }}"
+
+  - name: Write num packets to file
+    shell: echo {{ pkts }} > dumpfile
+
+  - name: Delete logical switch
+    shell: ovn-nbctl ls-del sw0
+
+  - name: Delete port added to br-int 
+    shell: ovs-vsctl del-port br-int {{ physical_interface }}_0
+
+  - name: Delete port added to br-int 
+    shell: ovs-vsctl del-port br-int {{ physical_interface }}_1
+
+  - name: Delete GRE port added to br-int 
+    shell: ovs-vsctl del-port br-int gre0
+
+  - name: Delete port added to br-int 
+    shell: ovs-vsctl clear bridge br-int mirrors
+
+  - name: Delete br-int OVS bridge
+    shell: ovs-vsctl del-br br-int
+
+  - name: Delete port added to br-ex OVS bridge
+    shell: ovs-vsctl del-port br-ex {{ physical_interface }}
+ 
+  - name: Delete br-ex OVS bridge
+    shell: ovs-vsctl del-br br-ex
+
+  - name: stop OVS
+    shell: ovs-ctl stop 
+
+  - name: stop controller
+    shell: ovn-ctl stop_controller
+
+  - name: stop northd
+    shell: ovn-ctl stop_northd
+ 
+  - name: Undefine VM
+    shell: virsh undefine testNAT
+
+  - name: Destroy VM
+    shell: virsh destroy testNAT
+
+  - name: Cleaning up files (delete file)
+    ansible.builtin.file:
+      path: dev_temp.xml
+      state: absent
+
+  - name: Cleaning up files (delete file)
+    ansible.builtin.file:
+      path: testNAT.xml
+      state: absent
+
+  - name: Cleaning up files (delete file)
+    ansible.builtin.file:
+      path: ping.service
+      state: absent
+
+  - name: Undefine VM
+    shell: virsh undefine testNAT1
+
+  - name: Destroy VM
+    shell: virsh destroy testNAT1
+
+  - name: Cleaning up files (delete file)
+    ansible.builtin.file:
+      path: dev_temp1.xml
+      state: absent
+
+  - name: Cleaning up files (delete file)
+    ansible.builtin.file:
+      path: testNAT1.xml
+      state: absent
+
+  - name: Delete RHEL image used for VM1 creation
+    ansible.builtin.file:
+      path: /var/lib/libvirt/images/rhel_image.qcow2
+      state: absent
+
+  - name: Delete RHEL image used for VM2 creation
+    ansible.builtin.file:
+      path: /var/lib/libvirt/images/rhelimage.qcow2
+      state: absent
+
+  - name: Cleaning up files (delete file)
+    ansible.builtin.file:
+      path: /etc/profile.d/custom-path.sh
+      state: absent
+
+  - name: Bring down VLAN interface
+    shell: ip link set {{ physical_interface }}.{{ vlan_tag }} down
+    ignore_errors: True
+
+  - name: Delete VLAN interface
+    shell: ip link delete {{ physical_interface }}.{{ vlan_tag }}
+    ignore_errors: True
+
+  - name: Remove the created VFs
+    shell: echo 0 > /sys/class/net/{{ physical_interface }}/device/sriov_numvfs
+    ignore_errors: True
+
+- remote_user: root
+  hosts: compute2
+  become: true
+
+  vars_files:
+  - ovn_ovs_vars
+
+  tasks:
+  - name: Bring down VLAN interface
+    shell: ip link set {{ remote_physical_interface }}.{{ vlan_tag }} down
+
+  - name: Delete VLAN interface
+    shell: ip link delete {{ remote_physical_interface }}.{{ vlan_tag }}
+
+  - name: Read number of mirrored pkts received
+    shell: cat dumpfile
+    register: numpkts
+
+  - name: Check number of pkts
+    debug:
+      var: numpkts.stdout
+    failed_when: numpkts.stdout|int < 10
+
+  - name: Cleaning up files (delete file)
+    ansible.builtin.file:
+      path: dumpfile
+      state: absent
+
+  - name: "Print Test Result"
+    debug: msg="Mirrored packets received"
+
+- remote_user: root
+  hosts: compute1
+  become: true
+
+  vars_files:
+  - ovn_ovs_vars
+
+  tasks:
+  - name: Read number of pkts on Representator port
+    shell: cat dumpfile
+    register: numpkts
+
+  - name: Check packets on Representator port
+    debug:
+      var: numpkts.stdout
+    failed_when: numpkts.stdout|int > 10
+
+  - name: Cleaning up files (delete file)
+    ansible.builtin.file:
+      path: dumpfile
+      state: absent
+
+  - name: "Print Test Result"
+    debug: msg="Mirrored packets and orignal pkts are offloaded - Test Complete"
+

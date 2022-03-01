@@ -8,6 +8,7 @@ Below are the use cases supported as of now
 3. Trunk VLAN
 4. Stateful ACL
 5. QoS
+6. Remote Port Mirroring
 
 # What to do before running the tests? (Common for All tests) 
 
@@ -97,6 +98,22 @@ Few steps are needed to be done as below before we can trigger the run
    Please run the cleanup script in the utilities folder.
    ansible-playbook -v -i inventory utilities/cleanupQosconfigs.yml
 
+# Steps to test Remote Port Mirroring use case
+
+1. Please configure required details in the files "ovn_ovs_vars" and "rhel_vars"
+   which sets the variables to appropriate values which will be used in the test run.
+
+2. Execute the test by using the command like below
+
+   ansible-playbook -v -i inventory testRemotePortMirroring.yml
+
+3. Logs to look for. It generates 1 log file which is timestamped and it will remain on your compute1 where we have taken the dump of flows.
+   File is named dump_flows_<timestamp>.txt
+
+4. We have taken care to see that the test cleans up all things which it created (expect the above logs). In case the test bails out inbetween and resources are not cleared out.
+   Please run the cleanup script in the utilities folder.
+
+   ansible-playbook -v -i inventory utilities/cleanupPortMirroringconfigs.yml
 
 Known Issues and Workarounds:
 

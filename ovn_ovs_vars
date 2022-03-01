@@ -5,6 +5,9 @@
 #Network topology used for the Transparent VLAN and Trunk VLAN
 # compute2(ping is initiated from here)--------------- VLAN------------------------compute1(DUT - Has mellanox nic)[ No VM created for this use-case. Directly testing on VFs]
 
+#Network topology used for the Remote Port Mirroring test
+# compute2(Monitor if mirrored traffic is reaching)--------------- VLAN------------compute1(DUT - Has mellanox nic)[ 2 VMs created. vf0 attached to VM1 and vf1 attached to VM2. ping from VM1->vM2 ]
+
 #compute1 specific configs below
 #Requirement: Has Mellanox connectx-5 NIC since we want to test HW offload mainly 
 
@@ -14,7 +17,7 @@ physical_interface: enp4s0f0
 #Set the VF to be used [No need to change this. By default 4 VFs are created and one is used]
 vf_dev_num: 0
 
-#----Applicable to TrunkVLAN test--------
+#----Applicable to TrunkVLAN test and Port Mirroring test-------- [Default values can be kept as is]
 vf_dev_num0: 0
 vf_dev_num1: 1
 #----------------------------------------
