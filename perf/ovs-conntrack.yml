@@ -1,0 +1,33 @@
+---
+
+- hosts: dut
+  vars:
+    datapath: dpdk
+  roles:
+    - ovs-base
+    - ovs-conntrack
+
+- hosts: tgen
+  vars:
+    datapath: dpdk
+  roles:
+    - role: trex
+      trex_opts: --astf
+
+    - role: cps-ndr
+      udp_percent: 1
+      min_cps: 1k
+      max_cps: 200k
+      message_size: 20
+      num_messages: 1
+      server_wait: 0
+      expected_cps: '{{hostvars.dut[datapath].cps_ct_short}}'
+
+    - role: cps-ndr
+      udp_percent: 1
+      min_cps: 100
+      max_cps: 15k
+      message_size: 20
+      num_messages: 200
+      server_wait: 200
+      expected_cps: '{{hostvars.dut[datapath].cps_ct_long}}'

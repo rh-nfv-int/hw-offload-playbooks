@@ -1,0 +1,15 @@
+---
+
+trex_dir: /tmp/trex-core
+output_file: /tmp/cps_ndr.json
+sample_time: 10
+num_samples: 3
+max_stddev: 3
+iterations: 8
+udp_percent: 1
+min_cps: 1k
+max_cps: 100k
+message_size: 20
+num_messages: 1
+server_wait: 0
+expected_cps: 1

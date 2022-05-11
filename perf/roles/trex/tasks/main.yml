@@ -1,0 +1,54 @@
+---
+
+- name: install build dependencies
+  ansible.builtin.dnf:
+    name:
+      - gcc
+      - gcc-c++
+      - git
+      - python3
+      - rdma-core-devel
+      - zlib-devel
+    state: installed
+  tags: install
+
+- name: stop existing trex server
+  ansible.builtin.command: pkill -x _t-rex-64
+  ignore_errors: true
+  tags: setup
+
+- name: clone trex
+  ansible.builtin.git:
+    repo: '{{trex_repo}}'
+    dest: '{{trex_dir}}'
+    version: '{{trex_tag}}'
+    force: true
+  tags: install
+
+- name: configure and build trex
+  ansible.builtin.command:
+    cmd: './b {{item}}'
+    chdir: '{{trex_dir}}/linux_dpdk'
+  loop:
+    - configure
+    - build
+  tags: install
+
+- name: upload trex configuration
+  ansible.builtin.copy:
+    dest: /etc/trex_cfg.yaml
+    content: '{{trex_config | to_nice_yaml}}'
+  tags: setup
+
+- name: start trex server
+  ansible.builtin.shell:
+    cmd: 'nohup ./t-rex-64 {{trex_opts}} -i </dev/null >/tmp/trex.log 2>&1 &'
+    chdir: '{{trex_dir}}/scripts'
+  tags: setup
+
+- name: wait for trex server
+  ansible.builtin.wait_for:
+    port: 4500
+    delay: 5
+    timeout: 30
+  tags: setup

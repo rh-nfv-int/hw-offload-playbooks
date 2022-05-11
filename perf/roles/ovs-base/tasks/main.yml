@@ -1,0 +1,11 @@
+---
+
+- name: reset datapath
+  ansible.builtin.shell: '{{item}}'
+  loop: '{{reset_cmds}}'
+  tags: setup
+
+- name: 'configure {{datapath}} datapath'
+  ansible.builtin.shell: '{{item}}'
+  loop: '{{hostvars.dut[datapath].setup_cmds}}'
+  tags: setup

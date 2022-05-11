@@ -1,0 +1,38 @@
+---
+
+- name: 'binary search: datapath={{datapath}} {{(num_messages|int * message_size|int * 2)|human}} bytes per connection over {{num_messages|int * server_wait|int / 1000}} seconds'
+  ansible.builtin.command:
+    cmd: >
+      ./cps_ndr.py -i{{iterations}} -o{{output_file}} -w{{server_wait}}
+        -t{{sample_time}} -N{{num_samples}} -d{{max_stddev}}
+        -s{{message_size}} -n{{num_messages}} -u{{udp_percent}}
+        -m{{min_cps}} -M{{max_cps}}
+    chdir: '{{trex_dir}}/scripts'
+  register: ndr_out
+  tags: test
+
+- ansible.builtin.slurp:
+    src: '{{output_file}}'
+  register: cps_out
+  tags: test
+
+- ansible.builtin.set_fact:
+    stats: '{{cps_out.content | b64decode | from_json}}'
+  tags: test
+
+- ansible.builtin.set_fact:
+    active_flows: '{{stats.global.active_flows | default(0)}}'
+    tx_cps: '{{stats.global.tx_cps | default(0)}}'
+    rx_bps: '{{stats.global.rx_bps | default(0)}}'
+    rx_pps: '{{stats.global.rx_pps | default(0)}}'
+  tags: test
+
+- ansible.builtin.debug:
+    msg: 'best iteration: {{active_flows | human}} active flows ({{tx_cps | human}} conn/s), {{rx_bps | human}} bit/s ({{rx_pps | human}} pkts/s)'
+  tags: test
+
+- name: 'expected connection rate: {{expected_cps | human}} conn/s'
+  ansible.builtin.assert:
+    that: 'tx_cps|float > expected_cps|float'
+  tags: test
+  ignore_errors: true  # this is the only way to display a non-fatal warning
