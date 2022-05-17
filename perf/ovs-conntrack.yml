@@ -14,7 +14,7 @@
     - role: trex
       trex_opts: --astf
 
-    - role: cps-ndr
+    - role: trex-cps-ndr
       udp_percent: 1
       min_cps: 1k
       max_cps: 200k
@@ -23,7 +23,7 @@
       server_wait: 0
       expected_cps: '{{hostvars.dut[datapath].cps_ct_short}}'
 
-    - role: cps-ndr
+    - role: trex-cps-ndr
       udp_percent: 1
       min_cps: 100
       max_cps: 15k
