@@ -1,0 +1,45 @@
+---
+
+- name: enable switchdev mode and create VFs
+  shell: |
+    set -xe
+    devlink dev param set pci/{{item}} name flow_steering_mode value smfs cmode runtime
+    sleep 1
+    devlink dev eswitch set pci/{{item}} mode switchdev
+    sleep 1
+    echo {{num_vfs}} > /sys/bus/pci/devices/{{item}}/sriov_numvfs
+  loop: "{{ ports }}"
+
+- name: configure queues
+  shell: |
+    set -xe
+    for i in /sys/bus/pci/devices/{{item}}/net/*; do
+      ifname=$(basename $i)
+      ethtool -G $ifname rx {{queue_descriptors}} tx {{queue_descriptors}}
+      ethtool -L $ifname combined {{n_rxq}}
+    done
+  loop: "{{ ports }}"
+
+- name: start vswitchd
+  service:
+    name: openvswitch.service
+    state: started
+
+- name: initialize hwol datapath
+  command: ovs-vsctl set open_vswitch . other_config:hw-offload=true
+
+- name: restart vswitchd
+  service:
+    name: openvswitch.service
+    state: restarted
+
+- name: create base bridges and ports
+  shell:
+    cmd: |
+      set -xe
+      ovs-vsctl add-br br{{i}}
+      pf=$(grep -vl vf /sys/bus/pci/devices/{{item}}/net/*/phys_port_name)
+      ovs-vsctl add-port br{{i}} $(basename $(dirname $pf))
+  loop: "{{ ports }}"
+  loop_control:
+    index_var: i

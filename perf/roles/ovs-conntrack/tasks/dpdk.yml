@@ -1,0 +1,11 @@
+---
+
+- name: add patch port
+  command: >
+    ovs-vsctl add-port br0 patch-br1 --
+      set interface patch-br1 type=patch options:peer=patch-br0 --
+      add-port br1 patch-br0 --
+      set interface patch-br0 type=patch options:peer=patch-br1
+
+- name: configure max conntracks
+  command: ovs-appctl dpctl/ct-set-maxconns {{max_conntrack}}

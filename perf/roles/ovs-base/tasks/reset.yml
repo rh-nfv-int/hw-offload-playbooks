@@ -1,0 +1,33 @@
+---
+
+- name: ensure testpmd is not running
+  command: pkill -x dpdk-testpmd
+  ignore_errors: true
+
+- name: purge ovs ports and bridges
+  shell: |
+    set -xe
+    ip neigh flush nud permanent || true
+    for br in `ovs-vsctl list-br`; do
+      for p in `ovs-vsctl list-ports $br`; do
+        ip addr flush dev $p || true
+        ovs-vsctl del-port $br $p
+      done
+      ovs-vsctl del-br $br
+    done
+
+- service:
+    name: openvswitch.service
+    state: stopped
+
+- file:
+    path: /etc/openvswitch/conf.db
+    state: absent
+
+- command: conntrack -F
+
+- name: remove VFs and disable switchdev mode
+  shell: |
+    echo 0 > /sys/bus/pci/devices/{{item}}/sriov_numvfs
+    devlink dev eswitch set pci/{{item}} mode legacy
+  loop: "{{ ports }}"

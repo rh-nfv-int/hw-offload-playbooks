@@ -1,0 +1,27 @@
+---
+
+- name: put representor ports in their respective briges
+  shell: |
+    set -xe
+    i=0
+    for pf in {{ports|join(' ')}}; do
+        f=$(grep -l 'vf0$' /sys/bus/pci/devices/$pf/net/*/phys_port_name)
+        ovs-vsctl add-port br$i $(basename $(dirname $f))
+        i=$((i + 1))
+    done
+
+- name: start testpmd
+  shell: |
+    set -xe
+    set --
+    for pf in {{ports|join(" ")}}; do
+        set -- "$@" -a $(basename $(readlink /sys/bus/pci/devices/$pf/virtfn0))
+    done
+    nohup dpdk-testpmd "$@" -l {{testpmd_core_ids}} -- \
+        --nb-cores={{testpmd_nb_cores}} \
+        --rxd={{queue_descriptors}} --txd={{queue_descriptors}} \
+        --stats-period 5 </dev/null >/tmp/testpmd.log 2>&1 &
+    sleep 5
+
+- name: configure max conntracks
+  shell: echo {{max_conntrack}} > /proc/sys/net/netfilter/nf_conntrack_max

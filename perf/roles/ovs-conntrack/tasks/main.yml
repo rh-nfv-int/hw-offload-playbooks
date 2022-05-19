@@ -1,9 +1,14 @@
 ---
 
-- name: configure ovs flows
-  ansible.builtin.command: '{{item}}'
-  loop:
-    - ovs-ofctl add-flow br0 "table=0,priority=10,ip,ct_state=-trk,actions=ct(table=0)"
-    - ovs-ofctl add-flow br0 "table=0,priority=10,ip,ct_state=+trk+new,actions=ct(commit),NORMAL"
-    - ovs-ofctl add-flow br0 "table=0,priority=10,ip,ct_state=+trk+est,actions=NORMAL"
+- name: configure bridges
+  include_tasks: '{{datapath}}.yml'
+  tags: setup
+
+- name: configure flows
+  command:
+    cmd: ovs-ofctl --bundle add-flow br0 -
+    stdin: |
+      add table=0,priority=10,ip,ct_state=-trk     actions=ct(table=0)
+      add table=0,priority=10,ip,ct_state=+trk+new actions=ct(commit),NORMAL
+      add table=0,priority=10,ip,ct_state=+trk+est actions=NORMAL
   tags: setup
