@@ -23,6 +23,7 @@
       message_size: 20
       num_messages: 1
       server_wait: 0
+      sample_time: 10
       expected_cps: '{{hostvars.dut[datapath].cps_ct_short}}'
 
     - role: trex-cps-ndr
@@ -30,6 +31,7 @@
       min_cps: 100
       max_cps: 15k
       message_size: 20
-      num_messages: 200
-      server_wait: 200
+      num_messages: 500
+      server_wait: 50
+      sample_time: 30
       expected_cps: '{{hostvars.dut[datapath].cps_ct_long}}'
