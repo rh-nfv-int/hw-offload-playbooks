@@ -203,7 +203,7 @@ def parse_args():
         type=ranged_float(MULTIPLIER, 4_000_000),
         help="""
         Max number of concurrent active flows.
-        Human readable values are accepted (e.g. 4.5m).
+        Human readable values are accepted (e.g. 3m).
         """,
     )
     g.add_argument(
@@ -441,6 +441,12 @@ def main():
         trex.reset()
         debug("... loading traffic profile ...")
         trex.load_profile(generate_traffic_profile(args))
+        debug(
+            f"... each connection",
+            f"{human_readable(args.num_messages * args.message_size * 2)} bytes",
+            "in both directions over",
+            f"{args.num_messages * args.server_wait / 1000:.1f} seconds ...",
+        )
 
         lower_mult = args.min_cps / MULTIPLIER
         upper_mult = args.max_cps / MULTIPLIER
@@ -453,10 +459,16 @@ def main():
 
         iterations = 0
         while True:
+            print(
+                f"... iteration #{iterations + 1}:",
+                f"lower={human_readable(lower_mult * MULTIPLIER)}",
+                f"cur={human_readable(mult * MULTIPLIER)}",
+                f"upper={human_readable(upper_mult * MULTIPLIER)}",
+            )
             debug("... waiting until tx rate is stable ...")
             stats = trex.get_stats()
             pps = stats["global"]["tx_pps"] or 1
-            for _ in range(10 * args.ramp_up):
+            for _ in range(100 * args.ramp_up):
                 time.sleep(1)
                 stats = trex.get_stats()
                 cur_pps = stats["global"]["tx_pps"] or 1
@@ -464,6 +476,11 @@ def main():
                     # less than 1% rate difference since last second
                     break
                 pps = cur_pps
+            else:
+                debug(
+                    "... tx rate still not stable after",
+                    f"{100 * args.ramp_up} seconds ...",
+                )
 
             for t in sorted(set([1, args.sample_time])):
                 debug(f"... sampling statistics over {t} seconds ...")
@@ -528,14 +545,16 @@ def main():
                 f"Size: ~{size:.1f}B",
             )
 
-            pkt_drop = stats["total"]["opackets"] - stats["total"]["ipackets"]
-            if errors and pkt_drop > 0:
+            tx = stats["total"]["opackets"]
+            rx = stats["total"]["ipackets"]
+            if errors and tx > rx:
                 print(
                     red("err"),
                     "dropped:",
-                    human_readable(pkt_drop),
+                    human_readable(tx - rx),
                     "pkts",
-                    f"({human_readable(pkt_drop)}/s)",
+                    f"({human_readable((tx - rx) / t)}/s)",
+                    f"~ {(tx - rx) / tx:.4%}",
                 )
 
             for err in errors:
