@@ -10,6 +10,8 @@
 - hosts: tgen
   vars:
     datapath: dpdk
+    dut: '{{hostvars.dut.ansible_host}}'
+    reset_command: '{{hostvars.dut[datapath].conntrack_flush_cmd}}'
   roles:
     - role: trex
       trex_opts: --astf
