@@ -2,8 +2,6 @@
 
 trex_dir: /tmp/trex-core
 output_file: /tmp/cps_ndr.json
-sample_time: 10
-error_threshold: 0.01
 iterations: 8
 udp_percent: 1
 min_cps: 1k

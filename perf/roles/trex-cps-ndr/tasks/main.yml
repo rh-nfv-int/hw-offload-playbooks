@@ -1,10 +1,15 @@
 ---
 
+- name: upload script
+  template:
+    src: cps_ndr.py
+    dest: '{{trex_dir}}/scripts/cps_ndr.py'
+  tags: test
+
 - name: 'binary search: datapath={{datapath}} {{(num_messages|int * message_size|int * 2)|human}} bytes per connection over {{num_messages|int * server_wait|int / 1000}} seconds'
   command:
     cmd: >
       ./cps_ndr.py -v -i{{iterations}} -o{{output_file}} -w{{server_wait}}
-        -T{{sample_time}} -e{{error_threshold}}
         -s{{message_size}} -n{{num_messages}} -u{{udp_percent}}
         -m{{min_cps}} -M{{max_cps}}
     chdir: '{{trex_dir}}/scripts'
