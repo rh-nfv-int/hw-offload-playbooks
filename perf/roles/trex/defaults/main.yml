@@ -1,6 +1,6 @@
 ---
 
-trex_repo: https://github.com/cisco-system-traffic-generator/trex-core
-trex_tag: master
+trex_repo: https://github.com/rh-nfv-int/trex-core
+trex_tag: rhosp-playbooks
 trex_dir: /tmp/trex-core
 trex_opts: ''
