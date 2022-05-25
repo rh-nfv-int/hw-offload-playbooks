@@ -1,0 +1,17 @@
+---
+
+- name: configure bridges
+  include_tasks: '{{datapath}}.yml'
+  tags: setup
+
+- name: reset flows
+  command: ovs-ofctl del-flows br1
+
+- name: configure flows
+  command:
+    cmd: ovs-ofctl --bundle add-flow br1 -
+    stdin: |
+      add table=0,priority=10,in_port={{left_port}}                  action=mod_vlan_vid:{{vlan}},{{right_port}}
+      add table=0,priority=10,in_port={{right_port}},dl_vlan={{vlan}} action=strip_vlan,{{left_port}}
+      add table=0,priority=0                                         action=drop
+  tags: setup

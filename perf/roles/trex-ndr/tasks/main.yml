@@ -1,0 +1,42 @@
+---
+
+- name: upload traffic profile
+  template:
+    src: '{{profile}}_profile.py'
+    dest: '{{trex_dir}}/scripts/{{profile}}_profile.py'
+
+- name: 'binary search: datapath={{datapath}} {{profile}}'
+  command:
+    cmd: >
+      ./ndr --stl -v --ports 0 1 --force-map --bi-dir --opt-bin-search
+        --profile {{profile}}_profile.py -o {{output_file}}
+    chdir: '{{trex_dir}}/scripts'
+  register: ndr_out
+  tags: test
+
+- debug:
+    msg: '{{ndr_out.stdout_lines}}'
+  tags: test
+
+- slurp:
+    src: '{{output_file}}'
+  register: results
+  tags: test
+
+- set_fact:
+    stats: '{{results.content | b64decode | from_json}}'
+  tags: test
+
+- set_fact:
+    rx_bps: '{{stats.results.rx_bps | default(0)}}'
+    rx_pps: '{{stats.results.rx_pps | default(0)}}'
+  tags: test
+
+- debug:
+    msg: 'best iteration: {{rx_bps | human}} bit/s ({{rx_pps | human}} pkts/s)'
+  tags: test
+
+- name: 'expected rate: {{expected_pps | human}} pkts/s'
+  assert:
+    that: 'rx_pps|float > expected_pps|float'
+  tags: test

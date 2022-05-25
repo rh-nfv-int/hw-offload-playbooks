@@ -1,0 +1,19 @@
+---
+
+- hosts: dut
+  vars:
+    datapath: dpdk
+  roles:
+    - ovs-base
+    - ovs-vlan
+
+- hosts: tgen
+  vars:
+    datapath: dpdk
+  roles:
+    - role: trex
+      trex_opts: -c 16
+
+    - role: trex-ndr
+      profile: vlan
+      expected_pps: '{{hostvars.dut[datapath].vlan_pps}}'

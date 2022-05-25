@@ -1,0 +1,41 @@
+---
+
+- name: put representor ports in their respective briges
+  shell: |
+    set -xe
+    i=0
+    for pf in {{ports|join(' ')}}; do
+        f=$(grep -l 'vf0$' /sys/bus/pci/devices/$pf/net/*/phys_port_name)
+        ovs-vsctl add-port br$i $(basename $(dirname $f))
+        i=$((i + 1))
+    done
+
+- name: dump pf interface name
+  shell: >
+    grep -vl vf /sys/bus/pci/devices/{{ports[1]}}/net/*/phys_port_name |
+    xargs dirname | xargs basename
+  register: pf_out
+
+- name: dump vf interface name
+  shell: >
+    grep -l 'vf0$' /sys/bus/pci/devices/{{ports[1]}}/net/*/phys_port_name |
+    xargs dirname | xargs basename
+  register: vf_out
+
+- name: set port names
+  set_fact:
+    left_port: '{{vf_out.stdout|trim}}'
+    right_port: '{{pf_out.stdout|trim}}'
+
+- name: start testpmd
+  shell: |
+    set -xe
+    set --
+    for pf in {{ports|join(" ")}}; do
+        set -- "$@" -a $(basename $(readlink /sys/bus/pci/devices/$pf/virtfn0))
+    done
+    nohup dpdk-testpmd "$@" -l {{testpmd_core_ids}} -- \
+        --nb-cores={{testpmd_nb_cores}} \
+        --rxd={{queue_descriptors}} --txd={{queue_descriptors}} \
+        --stats-period 5 </dev/null >/tmp/testpmd.log 2>&1 &
+    sleep 5

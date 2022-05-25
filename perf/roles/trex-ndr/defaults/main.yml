@@ -1,0 +1,7 @@
+---
+
+trex_dir: /tmp/trex-core
+output_file: /tmp/ndr-results.json
+profile: vlan
+vlan: 212
+expected_pps: 1
