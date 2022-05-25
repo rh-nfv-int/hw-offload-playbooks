@@ -33,5 +33,5 @@
       message_size: 20
       num_messages: 500
       server_wait: 50
-      sample_time: 30
+      sample_time: 60
       expected_cps: '{{hostvars.dut[datapath].cps_ct_long}}'
