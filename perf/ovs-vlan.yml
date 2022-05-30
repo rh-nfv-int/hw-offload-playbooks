@@ -1,4 +1,14 @@
 ---
+# TOPOLOGY
+#
+# +------------+   no VLAN  +--------+
+# |      port0 ==============        |
+# | dut        |            |  tgen  |
+# |      port1 **************        |
+# +------------+    VLAN    +--------+
+#
+# see roles/ovs-vlan/tasks/main.yml for dut configuration
+# and roles/ovs-vlan/tasks/{dpdk,hwol}.yml for datapath specifics
 
 - hosts: dut
   vars:

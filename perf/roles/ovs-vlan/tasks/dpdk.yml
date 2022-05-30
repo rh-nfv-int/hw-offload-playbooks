@@ -1,5 +1,12 @@
 ---
 
+# PACKET FLOW (*** no VLAN, === VLAN)
+#
+#   patch-br1 ** br0 ** pf0 ******************
+#       *
+#       *
+#   patch-br0 ** br1 == pf1 ==================
+
 - name: add patch port
   command: >
     ovs-vsctl add-port br0 patch-br1 --

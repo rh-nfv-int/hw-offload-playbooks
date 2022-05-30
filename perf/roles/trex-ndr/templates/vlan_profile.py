@@ -5,23 +5,21 @@ from trex_stl_lib.api import *
 
 class Profile:
     def get_streams(self, direction=0, tunables=(), **kwargs):
-        parser = argparse.ArgumentParser()
-        parser.add_argument("--vlan", type=int, default=int("{{vlan}}"))
-        args = parser.parse_args(tunables)
-
+        ip_left = "16.0.0.1"
+        port_left = 1025
+        ip_right = "48.0.0.1"
+        port_left = 12
         pkt = Ether()
-
         if direction == 0:
-            pkt /= IP(src="16.0.0.1", dst="48.0.0.1")
-            pkt /= UDP(dport=12, sport=1025)
+            pkt /= IP(src=ip_left, dst=ip_right)
+            pkt /= UDP(sport=port_left, dport=port_right)
 
         else:
-            pkt /= Dot1Q(prio=1, vlan=args.vlan)
-            pkt /= IP(src="48.0.0.1", dst="16.0.0.1")
-            pkt /= UDP(dport=1025, sport=12)
-
+            pkt = Ether(src=eth_right, dst=eth_left)
+            pkt /= Dot1Q(vlan=int("{{vlan}}"))
+            pkt /= IP(src=ip_right, dst=ip_left)
+            pkt /= UDP(sport=port_right, dport=port_left)
         pkt /= b"x" * 20
-
         return [STLStream(packet=STLPktBuilder(pkt), mode=STLTXCont())]
 
 

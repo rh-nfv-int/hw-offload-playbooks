@@ -6,6 +6,7 @@
 
 - name: reset flows
   command: ovs-ofctl del-flows br1
+  tags: setup
 
 - name: configure flows
   command:

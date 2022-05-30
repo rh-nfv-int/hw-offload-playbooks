@@ -1,5 +1,12 @@
 ---
 
+# PACKET FLOW (*** no VLAN, === VLAN)
+#
+#   +-----+ vf0 ** vf0-rep ** br0 ** pf0 ******************
+#   |test-|
+#   | pmd |
+#   +-----+ vf1 ** vf1-rep ** br1 == pf1 ==================
+
 - name: put representor ports in their respective briges
   shell: |
     set -xe
