@@ -1,0 +1,20 @@
+---
+
+# PACKET FLOW (*** plain traffic, === VxLAN encapsulated traffic)
+#
+#   patch-br-int ************ br0 ** pf0 *******
+#       *
+#       *
+#   patch-br0
+#       *
+#       *
+#     br-int ** vxlan0 ==== br1 ==== pf1 =======
+
+- name: configure bridges
+  shell: |
+    set -xe
+    ovs-vsctl add-br br-int -- set bridge br-int datapath_type=netdev
+    ovs-vsctl add-port br0 patch-br-int -- \
+        set interface patch-br-int type=patch options:peer=patch-br0 -- \
+        add-port br-int patch-br0 -- \
+        set interface patch-br0 type=patch options:peer=patch-br-int

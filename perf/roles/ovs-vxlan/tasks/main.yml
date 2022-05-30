@@ -1,0 +1,15 @@
+---
+
+- name: configure bridges
+  include_tasks: '{{datapath}}.yml'
+  tags: setup
+
+- name: configure ovs flows
+  shell: |
+    set -xe
+    ovs-vsctl add-port br-int vxlan0 -- set interface vxlan0 type=vxlan \
+        options:remote_ip=172.16.0.2 options:key=1337
+    ip link set br1 up
+    ip addr add 172.16.0.1/24 dev br1
+    ip neigh add 172.16.0.2 lladdr {{outer_right_mac}} dev br1
+  tags: setup

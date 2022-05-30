@@ -5,3 +5,4 @@ output_file: /tmp/ndr-results.json
 profile: vlan
 vlan: 212
 expected_pps: 1
+outer_left_mac: de:ed:de:ed:00:01

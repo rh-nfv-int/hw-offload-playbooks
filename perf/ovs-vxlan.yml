@@ -1,0 +1,32 @@
+---
+
+# TOPOLOGY
+#
+# +------------+   plain   +--------+
+# |      port0 =============        |
+# | dut        |           |  tgen  |
+# |      port1 *************        |
+# +------------+   VxLAN   +--------+
+#
+# see roles/ovs-vxlan/tasks/main.yml for dut configuration
+# and roles/ovs-vxlan/tasks/{dpdk,hwol}.yml for datapath specifics
+
+- hosts: dut
+  vars:
+    datapath: dpdk
+  roles:
+    - ovs-base
+    - role: ovs-vxlan
+      outer_right_mac: '{{hostvars.tgen.trex_config[0].port_info[1].src_mac}}'
+
+- hosts: tgen
+  vars:
+    datapath: dpdk
+  roles:
+    - role: trex
+      trex_opts: -c 16
+
+    - role: trex-ndr
+      profile: vxlan
+      expected_pps: '{{hostvars.dut[datapath].vxlan_pps}}'
+      outer_left_mac: '{{hostvars.dut.port_macs[1]}}'

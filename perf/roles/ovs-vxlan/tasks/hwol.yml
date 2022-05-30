@@ -1,0 +1,30 @@
+---
+
+# PACKET FLOW (*** plain traffic, === VxLAN encapsulated traffic)
+#
+#   +-----+ vf0 ** vf0-rep ** br0 ** pf0 *****************************
+#   |test-|
+#   | pmd |
+#   +-----+ vf1 ** vf1-rep ** br-int ** vxlan0 == br1 == pf1 =========
+
+- name: put representor ports in bridges
+  shell: |
+    set -xe
+    vf0_rep=$(grep -l 'vf0$' /sys/bus/pci/devices/{{ports[0]}}/net/*/phys_port_name)
+    ovs-vsctl add-port br0 $(basename $(dirname $vf0_rep))
+    vf1_rep=$(grep -l 'vf0$' /sys/bus/pci/devices/{{ports[1]}}/net/*/phys_port_name)
+    ovs-vsctl add-br br-int
+    ovs-vsctl add-port br-int $(basename $(dirname $vf1_rep))
+
+- name: start testpmd
+  shell: |
+    set -xe
+    set --
+    for pf in {{ports|join(" ")}}; do
+        set -- "$@" -a $(basename $(readlink /sys/bus/pci/devices/$pf/virtfn0))
+    done
+    nohup dpdk-testpmd "$@" -l {{testpmd_core_ids}} -- \
+        --nb-cores={{testpmd_nb_cores}} \
+        --rxd={{queue_descriptors}} --txd={{queue_descriptors}} \
+        --stats-period 5 </dev/null >/tmp/testpmd.log 2>&1 &
+    sleep 5
