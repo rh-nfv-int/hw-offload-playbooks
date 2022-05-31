@@ -8,14 +8,13 @@ class Profile:
         ip_left = "16.0.0.1"
         port_left = 1025
         ip_right = "48.0.0.1"
-        port_left = 12
+        port_right = 12
         pkt = Ether()
         if direction == 0:
             pkt /= IP(src=ip_left, dst=ip_right)
             pkt /= UDP(sport=port_left, dport=port_right)
 
         else:
-            pkt = Ether(src=eth_right, dst=eth_left)
             pkt /= Dot1Q(vlan=int("{{vlan}}"))
             pkt /= IP(src=ip_right, dst=ip_left)
             pkt /= UDP(sport=port_right, dport=port_left)
