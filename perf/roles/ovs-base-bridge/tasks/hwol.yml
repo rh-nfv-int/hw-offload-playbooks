@@ -1,0 +1,12 @@
+---
+
+- name: create base bridges and ports
+  shell:
+    cmd: |
+      set -xe
+      ovs-vsctl add-br br{{i}}
+      pf=$(grep -vl vf /sys/bus/pci/devices/{{item}}/net/*/phys_port_name)
+      ovs-vsctl add-port br{{i}} $(basename $(dirname $pf))
+  loop: "{{ ports }}"
+  loop_control:
+    index_var: i

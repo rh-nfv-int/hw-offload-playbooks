@@ -1,0 +1,4 @@
+---
+
+- include_tasks: '{{datapath}}.yml'
+  tags: setup

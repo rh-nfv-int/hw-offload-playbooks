@@ -5,6 +5,7 @@
     datapath: dpdk
   roles:
     - ovs-base
+    - ovs-base-bridge
     - ovs-conntrack
 
 - hosts: tgen

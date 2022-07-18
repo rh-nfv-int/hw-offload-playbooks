@@ -16,6 +16,7 @@
     datapath: dpdk
   roles:
     - ovs-base
+    - ovs-base-bridge
     - role: ovs-vxlan
       outer_right_mac: '{{hostvars.tgen.trex_config[0].port_info[1].src_mac}}'
 

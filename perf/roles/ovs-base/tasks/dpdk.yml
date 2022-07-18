@@ -16,16 +16,3 @@
     name: openvswitch.service
     state: restarted
 
-- name: create base bridges and ports
-  shell:
-    cmd: |
-      set -xe
-      ovs-vsctl add-br br{{i}} -- set bridge br{{i}} datapath_type=netdev
-      ovs-vsctl add-port br{{i}} pf{{i}} -- \
-        set interface pf{{i}} type=dpdk options:dpdk-devargs={{item}} \
-        options:n_rxq_desc={{queue_descriptors}} \
-        options:n_txq_desc={{queue_descriptors}} \
-        options:n_rxq={{n_rxq}}
-  loop: "{{ ports }}"
-  loop_control:
-    index_var: i
