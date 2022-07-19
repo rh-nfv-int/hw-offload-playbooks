@@ -1,0 +1,36 @@
+---
+# TOPOLOGY
+#
+# +--------------------+                  +-----------------+
+# |      dut_bond      |                  |    tgen_bond    |
+# |+-----+             |      switch      |         +-----+ |
+# || VM  |     +-------+   +----------+   +---------+     | |
+# ||     ----  | dpdk0 +----+----+    ----- port0   |  t  | |
+# ||test |     |       |   ||    |    |   +---------+  r  | |
+# || pmd |   bond      |   ||bond|    |   |         |  e  | |
+# ||     |     |       |   ||    |    |   +---------+  x  | |
+# ||     ----  | dpdk1 +----+----+    ----- port1   |     | |
+# ||     |     +-------+   +----------+   +---------+     | |
+# |+-----+             |                  |         +-----+ |
+# +--------------------+                  +-----------------+
+#
+# see roles/ovs-bond and roles/create-vm for dut configuration
+
+- hosts: dut_bond
+  vars:
+    datapath: dpdk
+  roles:
+    - ovs-base
+    - ovs-bond
+    - create-vm
+
+- hosts: tgen_bond
+  vars:
+    datapath: dpdk
+  roles:
+    - role: trex
+      trex_opts: -c 16
+
+    - role: trex-ndr
+      profile: multi
+      expected_pps: '{{hostvars.dut_bond[datapath].bond_pps}}'
