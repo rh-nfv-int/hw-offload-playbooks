@@ -1,0 +1,95 @@
+---
+
+- name: step2 Download RHEL image
+  get_url:
+    url: "{{ rhel_image }}"
+    dest: /root/rhel_image.qcow2
+
+- name: Cleaning up any used qcow2 files
+  ansible.builtin.file:
+    path: "{{vm_image}}"
+    state: absent
+
+- name: stop existing vm testpmd
+  virt:
+    name: testpmd
+    state: destroyed
+
+- name: define vm
+  virt:
+    name: testpmd
+    command: undefine
+
+- name: copy qcow2
+  copy:
+    src: /root/rhel_image.qcow2
+    dest: "{{vm_image}}"
+    remote_src: yes
+
+- name: Disable SELinux
+  selinux:
+    policy: targeted
+    state: permissive
+
+- name: force qemu user:group
+  template:
+    src: qemu.conf.j2
+    dest: /etc/libvirt/qemu.conf
+
+- name: enable libvirtd daemon
+  systemd:
+    name: libvirtd
+    state: restarted
+
+- name: initialize vhost socket dir
+  file:
+    path: "{{vhost_sockdir}}"
+    state: directory
+    owner: "{{qemu_user}}"
+    group: "{{qemu_group}}"
+
+- name: create vhost ports
+  shell: |
+    ifname="vhost{{ansible_loop.index0}}"
+    ovs-vsctl add-port br0 $ifname -- \
+        set interface $ifname type=dpdkvhostuserclient \
+        options:vhost-server-path={{vhost_sockdir}}/{{vm_name}}-$ifname.sock
+    ovs-vsctl set port vhost{{ansible_loop.index0}} tag={{item.vlan}}
+  loop: "{{vhost_macs}}"
+  loop_control:
+    extended: yes
+
+- name: install testpmd systemd service
+  template:
+    src: testpmd.service
+    dest: /tmp/testpmd.service
+
+- name: install tuned profile
+  template:
+    src: cpu-partitioning.conf
+    dest: /tmp/cpu-partitioning-variables.conf
+
+- name: step4 Customize the VM
+  shell: |
+    virt-customize -a "{{vm_image}}" \
+      --root-password password:test \
+      --run-command 'curl http://download.eng.brq.redhat.com/rhel-8/rel-eng/RHEL-8/latest-RHEL-8/repofile.repo > /etc/yum.repos.d/repo.repo' \
+      --run-command 'yum -y install dpdk dpdk-tools tuned-profiles-cpu-partitioning' \
+      --copy-in '/tmp/testpmd.service:/usr/lib/systemd/system' \
+      --copy-in '/tmp/cpu-partitioning-variables.conf:/etc/tuned' \
+      --run-command 'tuned-adm profile cpu-partitioning' \
+      --run-command 'systemctl enable testpmd.service' \
+      --run-command "echo 'GRUB_CMDLINE_LINUX=\"$GRUB_CMDLINE_LINUX default_hugepagesz=1GB hugepagesz=1G hugepages=4\"' >> /etc/default/grub" \
+      --run-command 'grub2-mkconfig -o /etc/grub2.cfg' \
+      --run-command 'yum -y update' \
+      --selinux-relabel
+
+- name: define vm
+  virt:
+    command: define
+    xml: "{{ lookup('template', 'testpmd.xml') }}"
+
+- name: start vm testpmd
+  virt:
+    name: testpmd
+    state: running

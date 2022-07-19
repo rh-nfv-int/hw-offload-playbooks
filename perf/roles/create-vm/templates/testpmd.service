@@ -1,0 +1,21 @@
+# vim: ft=systemd
+[Unit]
+Description=DPDK TestPMD
+After=network.target
+
+[Service]
+ExecStartPre=/usr/sbin/modprobe vfio-pci
+ExecStartPre=/bin/sh -c "echo 1 > /sys/module/vfio/parameters/enable_unsafe_noiommu_mode"
+ExecStartPre=/usr/bin/dpdk-devbind.py -b vfio-pci 0000:00:04.0
+ExecStartPre=/usr/bin/dpdk-devbind.py -b vfio-pci 0000:00:05.0
+ExecStart=/usr/bin/dpdk-testpmd \
+	-l {{vcpu_pinning.keys() | select('greaterthan',0)|join(",")}} \
+	-n 4 -- --nb-cores={{vcpu_pinning|length - 2}} \
+{% for v in vhost_macs %}
+	--eth-peer={{loop.index0}},{{v.tgen}} \
+{% endfor %}
+	--forward-mode=mac --rxd=2048 --txd=2048 \
+	--rxq={{rxq}} --txq={{rxq}} --stats-period=5
+
+[Install]
+WantedBy=multi-user.target

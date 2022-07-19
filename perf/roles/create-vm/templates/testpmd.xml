@@ -1,0 +1,80 @@
+<!--
+     vim: ft=xml ts=2 sts=2 sw=2 et
+ -->
+<domain type="kvm">
+  <name>{{vm_name}}</name>
+  <uuid>7ccf41d2-5fc4-43d1-9d82-dd8d8d22a72e</uuid>
+  <memory unit='KiB'>{{vm_memory}}</memory>
+  <currentMemory unit='KiB'>{{vm_memory}}</currentMemory>
+  <memoryBacking>
+    <hugepages>
+      <page size='1' unit='G'/>
+    </hugepages>
+    <locked/>
+  </memoryBacking>
+  <vcpu placement='static'>{{vcpu_pinning|length}}</vcpu>
+  <cputune>
+    {% for vcpu, cpu in vcpu_pinning.items() %}
+    <vcpupin vcpu='{{vcpu}}' cpuset='{{cpu}}'/>
+    {% endfor %}
+  </cputune>
+  <os>
+    <type arch="x86_64" machine="pc-i440fx-rhel7.6.0">hvm</type>
+    <boot dev="hd"/>
+  </os>
+  <features>
+    <acpi/>
+    <apic/>
+  </features>
+  <cpu mode='host-model' check='partial'>
+    <numa>
+      <cell id='0' cpus='{{vcpu_pinning.keys()|join(",")}}' memory='{{vm_memory}}' unit='KiB' memAccess='shared'/>
+    </numa>
+  </cpu>
+  <clock offset="utc">
+    <timer name="rtc" tickpolicy="catchup"/>
+    <timer name="pit" tickpolicy="delay"/>
+    <timer name="hpet" present="no"/>
+  </clock>
+  <pm>
+    <suspend-to-mem enabled="no"/>
+    <suspend-to-disk enabled="no"/>
+  </pm>
+  <devices>
+    <emulator>/usr/libexec/qemu-kvm</emulator>
+    <disk type="file" device="disk">
+      <driver name="qemu" type="qcow2"/>
+      <source file="{{vm_image}}"/>
+      <target dev="vda" bus="virtio"/>
+    </disk>
+    <controller type="usb" index="0" model="ich9-ehci1"/>
+    <controller type="usb" index="0" model="ich9-uhci1">
+      <master startport="0"/>
+    </controller>
+    <controller type="usb" index="0" model="ich9-uhci2">
+      <master startport="2"/>
+    </controller>
+    <controller type="usb" index="0" model="ich9-uhci3">
+      <master startport="4"/>
+    </controller>
+    <interface type="bridge">
+      <source bridge="virbr0"/>
+      <model type="virtio-net"/>
+    </interface>
+    {% for v in vhost_macs %}
+    <interface type="vhostuser">
+      <source type="unix" path="{{vhost_sockdir}}/{{vm_name}}-vhost{{loop.index0}}.sock" mode="server"/>
+      <mac address="{{v.vhost}}"/>
+      <model type="virtio"/>
+      <driver name='vhost' queues='{{rxq}}'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x0{{loop.index0 + 4}}' function='0x0'/>
+    </interface>
+    {% endfor %}
+    <console type="pty"/>
+    <input type="tablet" bus="usb"/>
+    <graphics type="vnc" port="-1"/>
+    <video>
+      <model type="qxl"/>
+    </video>
+  </devices>
+</domain>

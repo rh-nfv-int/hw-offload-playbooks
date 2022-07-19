@@ -1,0 +1,5 @@
+modprobe vfio-pci
+echo 1 > /sys/module/vfio/parameters/enable_unsafe_noiommu_mode
+dpdk-devbind.py -b vfio-pci 0000:00:04.0
+dpdk-devbind.py -b vfio-pci 0000:00:05.0
+nohup dpdk-testpmd -l 1,2,3,4,5 -n 4 -- -i --nb-cores=4  --eth-peer=0,e4:43:4b:4d:f1:10 --eth-peer=1,e4:43:4b:4d:f1:12 --forward-mode=mac --rxd=2048 --txd=2048 --rxq=2 --txq=2 --stats-period 5 </dev/null >/tmp/testpmd.log 2>&1 &

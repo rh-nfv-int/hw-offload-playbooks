@@ -1,0 +1,14 @@
+---
+
+vm_name: testpmd
+vhost_sockdir: /run/libvirt/vhost
+vcpu_pinning:
+  0: 0
+vm_memory: 8388608
+rxq: 1
+vhost_macs:
+  "00:00:00:00:00:01": "00:00:00:00:00:00"
+  "00:00:00:00:00:02": "00:00:00:00:00:00"
+qemu_user: openvswitch
+qemu_group: hugetlbfs
+vm_image: /var/lib/libvirt/images/testpmd.qcow2
