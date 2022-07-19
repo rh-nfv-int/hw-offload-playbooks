@@ -1,5 +1,14 @@
 ---
 
+- name: bind ports to vfio-pci
+  shell: |
+    set -xe
+    driver="/sys/bus/pci/devices/{{item}}/driver"
+    if basename $(readlink $driver) | grep -qFx -e i40e -e ice; then
+      driverctl set-override {{item}} vfio-pci
+    fi
+  loop: "{{ports}}"
+
 - name: create base bridges and ports
   shell:
     cmd: |

@@ -28,6 +28,11 @@
 
 - name: remove VFs and disable switchdev mode
   shell: |
+    driver="/sys/bus/pci/devices/{{item}}/driver"
+    if basename $(readlink $driver) | grep -qFx vfio-pci; then
+      driverctl unset-override {{item}}
+    fi
     echo 0 > /sys/bus/pci/devices/{{item}}/sriov_numvfs
     devlink dev eswitch set pci/{{item}} mode legacy
   loop: "{{ ports }}"
+  ignore_errors: true
