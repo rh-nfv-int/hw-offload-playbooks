@@ -1,0 +1,5 @@
+---
+
+datapath: dpdk
+bond_mode: balance-slb
+bond_rebalance: 10000

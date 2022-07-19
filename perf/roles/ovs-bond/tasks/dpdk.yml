@@ -1,0 +1,23 @@
+---
+
+- name: bind ports to vfio-pci
+  shell: |
+    set -xe
+    driver="/sys/bus/pci/devices/{{item}}/driver"
+    if basename $(readlink $driver) | grep -qFx -e i40e -e ice; then
+      driverctl set-override {{item}} vfio-pci
+    fi
+  loop: "{{ports}}"
+  tags: setup
+
+- name: create default bridge
+  command: ovs-vsctl add-br br0 -- set bridge br0 datapath_type=netdev
+  tags: setup
+
+- name: create bond port
+  shell: |
+    bond_ports="{% for p in range(ports|length) %} port{{p}} {% endfor %}"
+    ovs-vsctl add-bond br0 bond0 $bond_ports bond_mode={{bond_mode}} lacp=passive \
+      other_config:bond-rebalance-interval={{bond_rebalance}} \
+     {% for p in ports %} -- set interface port{{loop.index0}} type=dpdk options:dpdk-devargs={{p}}{% endfor %}
+  tags: setup
