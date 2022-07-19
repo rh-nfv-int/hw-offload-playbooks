@@ -8,8 +8,10 @@
 - name: initialize dpdk datapath
   command: ovs-vsctl set open_vswitch . other_config:{{item}}
   loop:
-    - 'dpdk-init=true'
+    - 'dpdk-lcore-mask={{dpdk_lcore_mask}}'
+    - 'dpdk-socket-mem={{dpdk_socket_mem}}'
     - 'pmd-cpu-mask={{dpdk_core_mask}}'
+    - 'dpdk-init=true'
 
 - name: restart vswitchd
   service:

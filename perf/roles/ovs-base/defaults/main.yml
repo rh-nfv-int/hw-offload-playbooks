@@ -1,0 +1,4 @@
+---
+dpdk_lcore_mask: "0x1"
+dpdk_core_mask: "0x1"
+dpdk_socket_mem: "1024"
