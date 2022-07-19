@@ -25,6 +25,7 @@
     state: absent
 
 - command: conntrack -F
+  ignore_errors: true
 
 - name: remove VFs and disable switchdev mode
   shell: |
