@@ -251,7 +251,7 @@
             ovs-vsctl add-port br-int {{ physical_interface }}_1 -- set Interface {{ physical_interface }}_1 external-ids:iface-id=sw0-port2
             ovs-vsctl set open . external_ids:ovn-encap-type=geneve
             ovs-vsctl set open . external_ids:ovn-encap-ip={{ host_ip }}
-            ovn-nbctl mirror-add mirror0 gre 0 both 10.10.10.2
+            ovn-nbctl mirror-add mirror0 gre 0 from-lport 10.10.10.2
             ovn-nbctl lsp-attach-mirror sw0-port1 mirror0
 
   - name: Create VLAN interface and bring it up
