@@ -12,11 +12,11 @@
     ignore_errors: True
 
   - name: Delete port added to br-int 
-    shell: ovs-vsctl del-port br-int {{ physical_interface }}_0
+    shell: ovs-vsctl del-port br-int {{ vf0_rep }}
     ignore_errors: True
 
   - name: Delete ports added to br-int
-    shell: ovs-vsctl del-port br-int {{ physical_interface }}_1
+    shell: ovs-vsctl del-port br-int {{ vf1_rep }}
     ignore_errors: True
 
   - name: Delete br-int OVS bridge
@@ -59,11 +59,11 @@
       state: absent
 
   - name: Delete created VLAN interfaces
-    shell: ip link del {{ physical_interface }}v{{ vf_dev_num0 }}.100
+    shell: ip link del {{ vf0 }}.100
     ignore_errors: True
 
   - name: Delete created VLAN interfaces
-    shell: ip link del {{ physical_interface }}v{{ vf_dev_num1 }}.300
+    shell: ip link del {{ vf1 }}.300
     ignore_errors: True
 
   - name: Remove the created VFs

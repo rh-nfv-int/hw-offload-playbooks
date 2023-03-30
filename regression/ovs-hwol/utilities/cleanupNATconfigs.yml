@@ -20,7 +20,7 @@
     ignore_errors: True
  
   - name: Delete port added to br-int 
-    shell: ovs-vsctl del-port br-int {{ physical_interface }}_0
+    shell: ovs-vsctl del-port br-int {{ vf0_rep }}
     ignore_errors: True
 
   - name: Delete br-int OVS bridge

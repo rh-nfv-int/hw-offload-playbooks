@@ -59,16 +59,16 @@
 
   - name: Creatd VLAN interface and bring it up
     shell: |
-            ip addr add 6.6.6.100/24 dev {{ physical_interface }}v{{ vf_dev_num0 }}
-            ip addr add 6.6.6.101/24 dev {{ physical_interface }}v{{ vf_dev_num1 }}
-            ip link add link {{ physical_interface }}v{{ vf_dev_num0 }} name {{ physical_interface }}v{{ vf_dev_num0 }}.100 type vlan id 100
-            ip link add link {{ physical_interface }}v{{ vf_dev_num1 }} name {{ physical_interface }}v{{ vf_dev_num1 }}.300 type vlan id 300
-            ip link set {{ physical_interface }}v{{ vf_dev_num0 }}.100 up
-            ip link set {{ physical_interface }}v{{ vf_dev_num1 }}.300 up
-            ip link set address f8:f2:1e:03:bf:f2 dev {{ physical_interface }}v{{ vf_dev_num0 }}.100
-            ip link set address aa:bb:cc:dd:ee:f2 dev {{ physical_interface }}v{{ vf_dev_num1 }}.300
-            ip addr add 5.5.5.100/24 dev {{ physical_interface }}v{{ vf_dev_num0 }}.100
-            ip addr add 7.7.7.100/24 dev {{ physical_interface }}v{{ vf_dev_num1 }}.300
+            ip addr add 6.6.6.100/24 dev {{ vf0 }}
+            ip addr add 6.6.6.101/24 dev {{ vf1 }}
+            ip link add link {{ vf0 }} name {{ vf0 }}.100 type vlan id 100
+            ip link add link {{ vf1 }} name {{ vf1 }}.300 type vlan id 300
+            ip link set {{ vf0 }}.100 up
+            ip link set {{ vf1 }}.300 up
+            ip link set address f8:f2:1e:03:bf:f2 dev {{ vf0 }}.100
+            ip link set address aa:bb:cc:dd:ee:f2 dev {{ vf1 }}.300
+            ip addr add 5.5.5.100/24 dev {{ vf0 }}.100
+            ip addr add 7.7.7.100/24 dev {{ vf1 }}.300
 
   - name: start OVN northd
     shell: ovn-ctl start_northd
@@ -95,8 +95,8 @@
             ovs-vsctl --may-exist add-br br-ex
             ovs-vsctl set open . external-ids:ovn-bridge-mappings=public:br-ex
             ovs-vsctl add-port br-ex {{ physical_interface }}
-            ovs-vsctl add-port br-int {{ physical_interface }}_0 -- set Interface {{ physical_interface }}_0 external-ids:iface-id=sw0-port0 options:tx_pcap={{ physical_interface }}_0-tx.pcap options:rxq_pcap={{ physical_interface }}_0-rx.pcap ofport-request=1
-            ovs-vsctl add-port br-int {{ physical_interface }}_1 -- set Interface {{ physical_interface }}_1 external-ids:iface-id=sw0-port1 options:tx_pcap={{ physical_interface }}_1-tx.pcap options:rxq_pcap={{ physical_interface }}_1-rx.pcap ofport-request=2
+            ovs-vsctl add-port br-int {{ vf0_rep }} -- set Interface {{ vf0_rep }} external-ids:iface-id=sw0-port0 options:tx_pcap={{ vf0_rep }}-tx.pcap options:rxq_pcap={{ vf0_rep }}-rx.pcap ofport-request=1
+            ovs-vsctl add-port br-int {{ vf1_rep }} -- set Interface {{ vf1_rep }} external-ids:iface-id=sw0-port1 options:tx_pcap={{ vf1_rep }}-tx.pcap options:rxq_pcap={{ vf1_rep }}-rx.pcap ofport-request=2
             ovs-vsctl set open . external_ids:ovn-encap-type=geneve
             ovs-vsctl set open . external_ids:ovn-encap-ip={{ host_ip }}
 
@@ -156,7 +156,7 @@
 
   - name: Dump traffic on Representator port of vf0
     shell: |
-            tcpdump -G 15 -W 1 -i {{ physical_interface }}_0 -w dumpfile0
+            tcpdump -G 15 -W 1 -i {{ vf0_rep }} -w dumpfile0 -Z root
     register: pkts0
 
 
@@ -215,7 +215,7 @@
 
   - name: Dump traffic on Representator port of vf1
     shell: |
-            tcpdump -G 15 -W 1 -i {{ physical_interface }}_1 -w dumpfile1
+            tcpdump -G 15 -W 1 -i {{ vf1_rep }} -w dumpfile1 -Z root
     register: pkts1
 
   - set_fact:
@@ -256,8 +256,8 @@
 
   - name: Delete port added to br-int
     shell: |
-            ovs-vsctl del-port br-int {{ physical_interface }}_0
-            ovs-vsctl del-port br-int {{ physical_interface }}_1
+            ovs-vsctl del-port br-int {{ vf0_rep }}
+            ovs-vsctl del-port br-int {{ vf1_rep }}
 
   - name: Delete br-int OVS bridge
     shell: ovs-vsctl del-br br-int
@@ -279,8 +279,8 @@
 
   - name: Delete created VLAN interfaces
     shell: |
-            ip link del {{ physical_interface }}v{{ vf_dev_num0 }}.100
-            ip link del {{ physical_interface }}v{{ vf_dev_num1 }}.300
+            ip link del {{ vf0 }}.100
+            ip link del {{ vf1 }}.300
 
   - name: Remove created VFs
     shell: echo 0 > /sys/class/net/{{ physical_interface }}/device/sriov_numvfs

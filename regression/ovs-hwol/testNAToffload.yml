@@ -17,7 +17,7 @@
 
   - name: step1 Install Virtualization packages on RHEL
     yum:
-        name: ['qemu-kvm', 'qemu-img', 'libguestfs-tools', 'virt-manager', 'libvirt', 'virt-install', 'libvirt-client', 'libguestfs-xfs', 'tcpdump']
+        name: ['qemu-kvm', 'qemu-img', 'libguestfs-tools', 'virt-manager', 'libvirt', 'virt-install', 'libvirt-client', 'libguestfs-xfs', 'tcpdump', 'guestfs-tools']
         state: latest
         update_cache: True
 
@@ -26,6 +26,9 @@
       url: "{{ rhel_image }}"
       dest: /var/lib/libvirt/images/rhel_image.qcow2
       mode: 0640
+
+  - name: amend rhel file 
+    shell: qemu-img amend -o compat=v3 /var/lib/libvirt/images/rhel_image.qcow2
 
   - name: step3 Create iperf service file to upload
     shell: |
@@ -106,11 +109,11 @@
       seconds: 10
 
   - name: Find device mac address of VF
-    shell: cat /sys/class/net/{{ physical_interface }}v{{ vf_dev_num }}/address 
+    shell: cat /sys/class/net/{{ vf0 }}/address
     register: vf_mac_addr
 
   - name: Parse PCI name and get address
-    shell: grep PCI_SLOT_NAME /sys/class/net/{{ physical_interface }}v{{ vf_dev_num }}/device/uevent 
+    shell: grep PCI_SLOT_NAME /sys/class/net/{{ vf0 }}/device/uevent
     register: output
   - set_fact:
         result: "{{ output.stdout }}"
@@ -192,8 +195,8 @@
   - name: Do OVS configs
     shell: |
             ovs-vsctl --may-exist add-br br-int
-            ovs-vsctl add-port br-int {{ physical_interface  }}_0
-            ovs-vsctl set interface {{ physical_interface }}_0 external_ids:iface-id=sw0-port1
+            ovs-vsctl add-port br-int {{ vf0_rep }}
+            ovs-vsctl set interface {{ vf0_rep }} external_ids:iface-id=sw0-port1
             ovs-vsctl --may-exist add-br br-ex
             ovs-vsctl add-port br-ex {{ physical_interface }}
             ovs-vsctl set open . external_ids:ovn-bridge-mappings="public:br-ex"
@@ -225,8 +228,8 @@
     pause:
       seconds: 10
 
-  - name: Starting the iperf client and run for 90 seconds
-    shell: iperf3 -c 172.16.0.7 --cport 6000 -t 90 {{ traffic }}
+  - name: Starting the iperf client and run for 80 seconds
+    shell: iperf3 -c 172.16.0.7 --cport 6000 -t 80 {{ traffic }}
     async: 90
     poll: 0
 
@@ -272,7 +275,7 @@
 
   - name: Dump traffic on Representator port
     shell: |
-            tcpdump -G 5 -W 1 -i {{ physical_interface }}_0 -w dumpfile
+            tcpdump -G 5 -W 1 -i {{ vf0_rep }} -w dumpfile -Z root
     register: pkts
 
   - set_fact:
@@ -324,7 +327,7 @@
     shell: ovn-nbctl ls-del public
 
   - name: Delete port added to br-int
-    shell: ovs-vsctl del-port br-int {{ physical_interface }}_0
+    shell: ovs-vsctl del-port br-int {{ vf0_rep }}
 
   - name: Delete br-int OVS bridge
     shell: ovs-vsctl del-br br-int

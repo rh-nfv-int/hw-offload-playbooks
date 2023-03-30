@@ -17,7 +17,7 @@
 
   - name: Install Virtualization packages on RHEL
     yum:
-        name: ['qemu-kvm', 'qemu-img', 'libguestfs-tools', 'virt-manager', 'libvirt', 'virt-install', 'libvirt-client', 'libguestfs-xfs', 'tcpdump']
+        name: ['qemu-kvm', 'qemu-img', 'libguestfs-tools', 'virt-manager', 'libvirt', 'virt-install', 'libvirt-client', 'libguestfs-xfs', 'tcpdump', 'guestfs-tools']
         state: latest
         update_cache: True
 
@@ -26,6 +26,9 @@
       url: "{{ rhel_image }}"
       dest: /var/lib/libvirt/images/rhel_image.qcow2
       mode: 0640
+
+  - name: amend rhel file
+    shell: qemu-img amend -o compat=v3 /var/lib/libvirt/images/rhel_image.qcow2
 
   - name: Create ping service file to upload
     shell: |
@@ -111,11 +114,11 @@
       seconds: 10
 
   - name: Find device mac address of VF
-    shell: cat /sys/class/net/{{ physical_interface }}v{{ vf_dev_num0 }}/address
+    shell: cat /sys/class/net/{{ vf0 }}/address
     register: vf_mac_addr
 
   - name: Parse PCI name and get address
-    shell: grep PCI_SLOT_NAME /sys/class/net/{{ physical_interface }}v{{ vf_dev_num0 }}/device/uevent
+    shell: grep PCI_SLOT_NAME /sys/class/net/{{ vf0 }}/device/uevent
     register: output
   - set_fact:
         result: "{{ output.stdout }}"
@@ -154,6 +157,9 @@
       dest: /var/lib/libvirt/images/rhelimage.qcow2
       mode: 0640
 
+  - name: amend rhel file
+    shell: qemu-img amend -o compat=v3 /var/lib/libvirt/images/rhelimage.qcow2
+
   - name: Customize the VM
     shell: virt-customize -a /var/lib/libvirt/images/rhelimage.qcow2 --root-password password:test --run-command 'subscription-manager register --force --username={{ subs_uname }}  --password={{ subs_pwd }}' --run-command 'subscription-manager attach --auto' --run-command 'yum -y install iperf3' --run-command 'yum -y update' --selinux-relabel
 
@@ -181,11 +187,11 @@
     shell: virsh start testNAT1
 
   - name: Find device mac address of VF
-    shell: cat /sys/class/net/{{ physical_interface }}v{{ vf_dev_num1 }}/address
+    shell: cat /sys/class/net/{{ vf1 }}/address
     register: vf_mac_addr1
 
   - name: Parse PCI name and get address
-    shell: grep PCI_SLOT_NAME /sys/class/net/{{ physical_interface }}v{{ vf_dev_num1 }}/device/uevent
+    shell: grep PCI_SLOT_NAME /sys/class/net/{{ vf1 }}/device/uevent
     register: output
   - set_fact:
         result: "{{ output.stdout }}"
@@ -247,13 +253,13 @@
             ovs-vsctl --may-exist add-br br-ex
             ovs-vsctl set open . external-ids:ovn-bridge-mappings=public:br-ex
             ovs-vsctl add-port br-ex {{ physical_interface }}
-            ovs-vsctl add-port br-int {{ physical_interface }}_0 -- set Interface {{ physical_interface }}_0 external-ids:iface-id=sw0-port1
-            ovs-vsctl add-port br-int {{ physical_interface }}_1 -- set Interface {{ physical_interface }}_1 external-ids:iface-id=sw0-port2
+            ovs-vsctl add-port br-int {{ vf0_rep }} -- set Interface {{ vf0_rep }} external-ids:iface-id=sw0-port1
+            ovs-vsctl add-port br-int {{ vf1_rep }} -- set Interface {{ vf1_rep }} external-ids:iface-id=sw0-port2
             ovs-vsctl set open . external_ids:ovn-encap-type=geneve
             ovs-vsctl set open . external_ids:ovn-encap-ip={{ host_ip }}
             ovs-vsctl add-port br-int gre0 -- set Interface gre0 type=gre options:local_ip=10.10.10.1 options:remote_ip=10.10.10.2 options:key=0 -- --id=@p get port gre0 -- --id=@m create mirror name=mirror0 output-port=@p -- set bridge br-int mirrors=@m
-            ovs-vsctl -- --id=@p1 get Port {{ physical_interface }}_0 -- add Mirror mirror0 select-dst-port @p1
-            ovs-vsctl -- --id=@p1 get Port {{ physical_interface }}_0 -- add Mirror mirror0 select-src-port @p1
+            ovs-vsctl -- --id=@p1 get Port {{ vf0_rep }} -- add Mirror mirror0 select-dst-port @p1
+            ovs-vsctl -- --id=@p1 get Port {{ vf0_rep }} -- add Mirror mirror0 select-src-port @p1
 
   - name: Create VLAN interface and bring it up
     shell: |
@@ -286,7 +292,7 @@
 
   - name: Dump traffic on VLAN interface
     shell: |
-            tcpdump -G 10 -W 1 -i {{ remote_physical_interface }}.{{ vlan_tag }} -w dumpfile
+            tcpdump -G 10 -W 1 -i {{ remote_physical_interface }}.{{ vlan_tag }} -w dumpfile -Z root
     register: pkts
 
   - set_fact:
@@ -323,7 +329,7 @@
 
   - name: Dump traffic on Representator port
     shell: |
-            tcpdump -G 10 -W 1 -i {{ physical_interface }}_0 -w dumpfile
+            tcpdump -G 10 -W 1 -i {{ vf0_rep }} -w dumpfile -Z root
     register: pkts
 
   - set_fact:
@@ -340,10 +346,10 @@
     shell: ovn-nbctl ls-del sw0
 
   - name: Delete port added to br-int 
-    shell: ovs-vsctl del-port br-int {{ physical_interface }}_0
+    shell: ovs-vsctl del-port br-int {{ vf0_rep }}
 
   - name: Delete port added to br-int 
-    shell: ovs-vsctl del-port br-int {{ physical_interface }}_1
+    shell: ovs-vsctl del-port br-int {{ vf1_rep }}
 
   - name: Delete GRE port added to br-int 
     shell: ovs-vsctl del-port br-int gre0

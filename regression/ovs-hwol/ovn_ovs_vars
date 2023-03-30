@@ -12,14 +12,15 @@
 #Requirement: Has Mellanox connectx-5 NIC since we want to test HW offload mainly 
 
 #PF - Set Physical interface from which VF is going to be created
-physical_interface: enp4s0f0
+physical_interface: enp4s0f0np0
 
-#Set the VF to be used [No need to change this. By default 4 VFs are created and one is used]
-vf_dev_num: 0
+#Please configure the representators and VFs as it is getting named
+vf0: enp4s0f2v0
+vf0_rep: enp4s0f0npf0vf0
 
-#----Applicable to TrunkVLAN test and Port Mirroring test-------- [Default values can be kept as is]
-vf_dev_num0: 0
-vf_dev_num1: 1
+vf1: enp4s0f3v1
+vf1_rep: enp4s0f0npf0vf1
+
 #----------------------------------------
 
 #OVN and OVS installed path on compute1

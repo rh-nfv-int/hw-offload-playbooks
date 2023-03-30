@@ -60,7 +60,7 @@
           echo 4 > /sys/class/net/{{ physical_interface }}/device/sriov_numvfs
 
   - name: Find device mac address of VF
-    shell: cat /sys/class/net/{{ physical_interface }}v{{ vf_dev_num }}/address
+    shell: cat /sys/class/net/{{ vf0 }}/address
     register: vf_mac_addr
 
   - name: step10
@@ -69,8 +69,8 @@
 
   - name: Set max_tx_rate on vf
     shell: |
-            ip addr add 6.6.6.100/24 dev {{ physical_interface }}v{{ vf_dev_num }}
-            ip link set {{ physical_interface }} vf {{ vf_dev_num }} max_tx_rate 1000
+            ip addr add 6.6.6.100/24 dev {{ vf0 }}
+            ip link set {{ physical_interface }} vf 0 max_tx_rate 1000
 
   - name: start OVN northd
     shell: ovn-ctl start_northd
@@ -94,7 +94,7 @@
             ovs-vsctl --may-exist add-br br-ex
             ovs-vsctl set open . external-ids:ovn-bridge-mappings=public:br-ex
             ovs-vsctl add-port br-ex {{ physical_interface }}
-            ovs-vsctl add-port br-int {{ physical_interface }}_0 -- set Interface {{ physical_interface }}_0 external-ids:iface-id=sw0-port1
+            ovs-vsctl add-port br-int {{ vf0_rep }} -- set Interface {{ vf0_rep }} external-ids:iface-id=sw0-port1
             ovs-vsctl set open . external_ids:ovn-encap-type=geneve
             ovs-vsctl set open . external_ids:ovn-encap-ip={{ host_ip }}
 
@@ -140,7 +140,7 @@
   tasks:
 
   - name: Starting the iperf client from compute1 and run for 100 seconds
-    shell: iperf3 -c 6.6.6.6 -t 80
+    shell: iperf3 -c 6.6.6.6 -t 70
     async: 80
     poll: 0
     register: iperf
@@ -162,7 +162,7 @@
 
   - name: Dump traffic on Representator port
     shell: |
-            tcpdump -G 15 -W 1 -i {{ physical_interface }}_0 -w dumpfile
+            tcpdump -G 15 -W 1 -i {{ vf0_rep }} -w dumpfile -Z root
     register: pkts
 
   - set_fact:
@@ -207,6 +207,10 @@
     shell: |
             ip link del {{ remote_physical_interface }}.{{ vlan_tag }}
 
+  - name: stop iperf
+    shell: killall -9 iperf3
+    ignore_errors: True
+
 - remote_user: root
   hosts: compute1
   become: true
@@ -219,7 +223,7 @@
     shell: ovn-nbctl ls-del sw0
 
   - name: Delete port added to br-int
-    shell: ovs-vsctl del-port br-int {{ physical_interface }}_0
+    shell: ovs-vsctl del-port br-int {{ vf0_rep }}
 
   - name: Delete br-int OVS bridge
     shell: ovs-vsctl del-br br-int
