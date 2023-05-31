@@ -1,6 +1,6 @@
 ---
 
-trex_dir: /tmp/trex-core
+trex_install_dir: /opt/trex
 output_file: /tmp/ndr-results.json
 profile: vlan
 vlan: 212

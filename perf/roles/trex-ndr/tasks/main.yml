@@ -3,14 +3,14 @@
 - name: upload traffic profile
   template:
     src: '{{profile}}_profile.py'
-    dest: '{{trex_dir}}/scripts/{{profile}}_profile.py'
+    dest: '{{ trex_install_dir }}/{{profile}}_profile.py'
 
 - name: 'binary search: datapath={{datapath}} {{profile}}'
   command:
     cmd: >
       ./ndr --stl -v --ports 0 1 --force-map --bi-dir --opt-bin-search
         --profile {{profile}}_profile.py -o {{output_file}}
-    chdir: '{{trex_dir}}/scripts'
+    chdir: '{{ trex_install_dir }}/'
   register: ndr_out
   tags: test
 

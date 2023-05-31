@@ -1,14 +1,9 @@
 ---
 
-- name: install build dependencies
+- name: install runtime dependencies
   dnf:
     name:
-      - gcc
-      - gcc-c++
-      - git
       - python3
-      - rdma-core-devel
-      - zlib-devel
     state: installed
   tags: install
 
@@ -17,21 +12,20 @@
   ignore_errors: true
   tags: setup
 
-- name: clone trex
-  git:
-    repo: '{{trex_repo}}'
-    dest: '{{trex_dir}}'
-    version: '{{trex_tag}}'
-    force: true
+- name: Create TRex install directory
+  file:
+    path: "{{ trex_install_dir }}"
+    state: directory
+    mode: "0755"
   tags: install
 
-- name: configure and build trex
-  command:
-    cmd: './b {{item}}'
-    chdir: '{{trex_dir}}/linux_dpdk'
-  loop:
-    - configure
-    - build
+- name: Download and Extract TRex release
+  unarchive:
+    src: "{{ trex_release_url }}/{{ trex_version }}.tar.gz"
+    dest: "{{ trex_install_dir }}"
+    remote_src: yes
+    extra_opts: --strip-components=1
+    validate_certs: no
   tags: install
 
 - name: upload trex configuration
@@ -42,8 +36,8 @@
 
 - name: start trex server
   shell:
-    cmd: 'nohup ./t-rex-64 {{trex_opts}} -i </dev/null >/tmp/trex.log 2>&1 &'
-    chdir: '{{trex_dir}}/scripts'
+    cmd: 'nohup ./t-rex-64 --cfg /etc/trex_cfg.yaml -i </dev/null >/tmp/trex.log 2>&1 &'
+    chdir: '{{ trex_install_dir }}/'
   tags: setup
 
 - name: wait for trex server
