@@ -19,5 +19,5 @@
     bond_ports="{% for p in range(ports|length) %} port{{p}} {% endfor %}"
     ovs-vsctl add-bond br0 bond0 $bond_ports bond_mode={{bond_mode}} lacp=passive \
       other_config:bond-rebalance-interval={{bond_rebalance}} \
-     {% for p in ports %} -- set interface port{{loop.index0}} type=dpdk options:dpdk-devargs={{p}}{% endfor %}
+     {% for p in ports %} -- set interface port{{loop.index0}} type=dpdk options:dpdk-devargs={{p}} options:n_rxq={{n_rxq}}{% endfor %}
   tags: setup
