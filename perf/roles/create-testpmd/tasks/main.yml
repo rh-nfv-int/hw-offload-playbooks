@@ -1,0 +1,38 @@
+---
+- name: Disable SELinux
+  selinux:
+    policy: targeted
+    state: permissive
+  tags: setup
+
+- name: create directory
+  file:
+    path: "/tmp/testpmd"
+    state: directory
+    owner: openvswitch
+    group: hugetlbfs
+  tags: setup
+
+- name: Remove Sockets
+  shell: "rm -f /tmp/sock*"
+  become: true
+  become_user: openvswitch
+  tags: setup
+
+- name: install testpmd systemd service
+  template:
+    src: testpmd.service
+    dest: /etc/systemd/system/testpmd.service
+    owner: openvswitch
+    group: hugetlbfs
+    mode: 0777
+  tags: install
+
+- name: Enable TestPMD service
+  systemd:
+    name: testpmd
+    enabled: yes
+    daemon_reload: true
+    state: started
+    force: true
+  tags: setup
