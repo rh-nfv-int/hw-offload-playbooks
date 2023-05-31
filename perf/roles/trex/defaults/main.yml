@@ -1,6 +1,7 @@
 ---
 
-trex_repo: https://github.com/rh-nfv-int/trex-core
 trex_tag: rhosp-playbooks
-trex_dir: /tmp/trex-core
 trex_opts: ''
+trex_release_url: "https://trex-tgn.cisco.com/trex/release"
+trex_version: 'v3.03'
+trex_install_dir: "/opt/trex"
