@@ -1,0 +1,22 @@
+# vim: ft=systemd
+[Unit]
+Description=DPDK TestPMD
+After=network.target
+
+[Service]
+Type=simple
+User=openvswitch
+Group=hugetlbfs
+ExecStartPre=rm -rf /tmp/sock*
+ExecStart=/usr/src/dpdk-stable-22.11.1/build/app/dpdk-testpmd \
+	-l {{vcpu_pinning.keys() | select('greaterthan',0)|join(",")}} --no-pci \
+	--vdev=net_virtio_user0,mac=00:11:22:33:44:10,path=/tmp/sock0,server=1,queues={{rxq}} \
+	--vdev=net_virtio_user1,mac=00:11:22:33:44:11,path=/tmp/sock1,server=1,queues={{rxq}} \
+	-n 4 -- --nb-cores={{vcpu_pinning|length - 2}} --rxq={{rxq}} --txq={{rxq}} --rxd={{rxd}} --txd={{rxd}}\
+{% for v in vhost_macs %}
+	--eth-peer={{loop.index0}},{{v.tgen}} \
+{% endfor %}
+	--forward-mode=mac --stats-period=5
+
+[Install]
+WantedBy=multi-user.target
