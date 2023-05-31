@@ -1,0 +1,19 @@
+---
+
+- name: configure bridges
+  include_tasks: '{{datapath}}.yml'
+  tags: setup
+
+- name: initialize pmd-auto-lb
+  command: ovs-vsctl set open_vswitch . other_config:{{item}}
+  loop:
+    - 'pmd-auto-lb={{pmd_auto_lb}}'
+    - 'pmd-lb-load-threshold={{pmd_lb_load_threshold}}'
+    - 'pmd-rxq-assign={{pmd_rxq_assign}}'
+  tags: setup
+
+- name: restart vswitchd
+  service:
+    name: openvswitch.service
+    state: restarted
+  tags: setup

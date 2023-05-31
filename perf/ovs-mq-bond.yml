@@ -1,0 +1,20 @@
+- hosts: dut_bond
+  vars:
+    datapath: dpdk
+
+  roles:
+    - ovs-base
+    - ovs-bond
+    - ovs-mq-bond
+    - create-testpmd
+
+- hosts: tgen_bond
+  vars:
+    datapath: dpdk
+  roles:
+    - role: trex
+      trex_opts: -c 20
+
+    - role: trex-ndr
+      profile: multi
+      expected_pps: '{{hostvars.dut_bond[datapath].bond_pps}}'

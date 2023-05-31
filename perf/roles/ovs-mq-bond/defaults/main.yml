@@ -1,0 +1,5 @@
+---
+
+pmd_auto_lb: "true"
+pmd_lb_load_threshold: 70
+pmd_rxq_assign: cycles

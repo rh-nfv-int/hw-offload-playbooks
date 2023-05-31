@@ -1,0 +1,11 @@
+---
+
+- name: add port
+  command: >
+    ovs-vsctl add-port br0 vhost0 --
+      set interface vhost0 type=dpdkvhostuserclient options:vhost-server-path="/tmp/sock0" --
+      add-port br0 vhost1 --
+      set interface vhost1 type=dpdkvhostuserclient options:vhost-server-path="/tmp/sock1" --
+      set port vhost1 tag=201 --
+      set port vhost0 tag=201
+  tags: setup
