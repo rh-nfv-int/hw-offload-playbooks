@@ -8,7 +8,7 @@
 - name: 'binary search: datapath={{datapath}} {{profile}}'
   command:
     cmd: >
-      ./ndr --stl -v --ports 0 1 --force-map --bi-dir --opt-bin-search
+      ./ndr --stl -v --ports 0 1 -t {{it_interval}} -ft {{first_it_time}} --force-map --bi-dir --opt-bin-search
         --profile {{profile}}_profile.py -o {{output_file}}
     chdir: '{{ trex_install_dir }}/'
   register: ndr_out
