@@ -6,3 +6,5 @@ profile: vlan
 vlan: 212
 expected_pps: 1
 outer_left_mac: de:ed:de:ed:00:01
+queue_ratios: "1:1:1:1"
+profile_tunable: " "

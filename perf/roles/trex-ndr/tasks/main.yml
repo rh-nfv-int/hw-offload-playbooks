@@ -5,11 +5,22 @@
     src: '{{profile}}_profile.py'
     dest: '{{ trex_install_dir }}/{{profile}}_profile.py'
 
+- name: GET dpdk-rss-flows.py file
+  get_url:
+    url: "https://git.dpdk.org/dpdk/plain/usertools/dpdk-rss-flows.py"
+    dest: "{{ trex_install_dir }}/rss.py"
+    mode: 0755
+  when: profile == 'imbalance'
+
+- set_fact:
+      profile_tunable: --prof-tun=queue-ratios={{ queue_ratios }}
+  when: profile == 'imbalance'
+
 - name: 'binary search: datapath={{datapath}} {{profile}}'
   command:
     cmd: >
       ./ndr --stl -v --ports 0 1 -t {{it_interval}} -ft {{first_it_time}} --force-map --bi-dir --opt-bin-search
-        --profile {{profile}}_profile.py -o {{output_file}}
+        --profile {{profile}}_profile.py {{ profile_tunable }} -o {{output_file}}
     chdir: '{{ trex_install_dir }}/'
   register: ndr_out
   tags: test
